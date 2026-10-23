@@ -4,6 +4,8 @@ Une boîte à outils personnelle, en HTML/CSS/JavaScript, avec connexion OpenID 
 (Authorization Code + PKCE S256), Google Sheets et Apps Script. Aucun npm, bundler,
 framework ou CDN a l'execution.
 
+![Page d'acceuil](./docs/screenshots/welcome.png)
+
 ## Essayer en local
 
 Prerequis : Python 3.10+ (bibliotheque standard uniquement).
