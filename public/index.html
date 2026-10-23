@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="Toolbox Share : votre boîte à outils, toujours prête à rendre service.">
+  <title>Toolbox Share | Ma boîte à outils</title>
+  <link rel="icon" href="assets/icons/hammer.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="vendor/oidc-client-ts.min.js"></script>
+  <script defer src="config.js"></script>
+  <script defer src="auth.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Toolbox Share, accueil"><span class="brand-icon"><img src="assets/icons/hammer.svg" alt="" width="23" height="23"></span>Toolbox Share<span class="brand-note">L'ÉQUIPAGE DES OUTILS</span></a>
+    <div class="account"><span id="session-label">Session locale</span><button id="auth-button" class="button secondary" type="button"><img src="assets/icons/log-in.svg" alt="">Se connecter</button></div>
+  </header>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Navigation principale">
+      <p class="nav-label">MON ESPACE</p>
+      <a class="nav-item active" href="#outils" aria-current="page"><img src="assets/icons/wrench.svg" alt="">Ma boîte à outils<span id="nav-count">0</span></a>
+      <div class="nav-future"><img src="assets/icons/users.svg" alt=""><span>Les outils du quartier<small>Prochaine escale</small></span></div>
+      <div class="nav-future"><img src="assets/icons/arrow-left-right.svg" alt=""><span>Mes demandes<small>Prochaine escale</small></span></div>
+      <div class="sidebar-bottom"><span class="small-dot"></span>Moins acheter, plus partager.</div>
+    </aside>
+    <main id="outils">
+      <div class="breadcrumb">Mon espace <span>/</span> Ma boîte à outils</div>
+      <section class="page-heading">
+        <div><p class="eyebrow">BIENVENUE À BORD</p><h1>Ma boîte à outils<span>.</span></h1><p class="subtitle">Les bons outils font les bons coups de main.</p></div>
+        <button id="add-button" class="button primary" type="button"><img src="assets/icons/plus.svg" alt="">Ajouter un outil</button>
+      </section>
+      <section class="workshop-banner" aria-label="L'esprit Toolbox Share">
+        <img src="assets/workshop.jpg" alt="Marteau à manche orange et tête en acier" width="1280" height="580">
+        <div><span class="banner-kicker">CAP SUR LE PARTAGE</span><h2>À l'abordage des petits travaux !</h2></div>
+        <span class="banner-tag">RÉPARER &nbsp; CRÉER &nbsp; TRANSMETTRE</span>
+      </section>
+      <section class="inventory-summary" aria-label="Résumé de votre inventaire">
+        <div><strong id="total-count">0</strong><span>outils dans ma boîte</span></div>
+        <div><strong id="shared-count">0</strong><span>avec partage prévu</span></div>
+        <div class="session-status"><span id="mode-badge" class="badge">Démonstration</span><span id="mode-note">Données temporaires, dans cet onglet uniquement.</span></div>
+      </section>
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+      <section class="inventory" aria-labelledby="inventory-title">
+        <div class="inventory-title"><h2 id="inventory-title">Mon inventaire <span id="visible-count">0</span></h2><button id="refresh-button" class="icon-button" title="Actualiser les outils" aria-label="Actualiser les outils"><img src="assets/icons/refresh-cw.svg" alt=""></button></div>
+        <div class="filters">
+          <label class="search"><img src="assets/icons/search.svg" alt=""><input id="search" type="search" placeholder="Rechercher un outil…" aria-label="Rechercher un outil" maxlength="100"></label>
+          <label class="select-filter"><span class="sr-only">Catégorie</span><select id="category-filter"><option value="">Toutes les catégories</option><option value="Percage">Perçage</option><option value="Decoupe">Découpe</option><option value="Jardin">Jardin</option><option value="Mesure">Mesure</option><option value="A main">À main</option><option value="Autre">Autre</option></select></label>
+          <label class="select-filter"><span class="sr-only">Partage</span><select id="sharing-filter"><option value="">Tous les outils</option><option value="shared">Partage prévu</option><option value="private">Privés</option></select></label>
+        </div>
+        <p id="loading" class="empty-state" hidden>Chargement de votre boîte à outils…</p>
+        <div id="tool-grid" class="tool-grid" aria-busy="false"></div>
+        <div id="empty-state" class="empty-state" hidden><img src="assets/icons/wrench.svg" alt="" width="36" height="36"><h3 id="empty-title">Votre boîte attend son premier outil.</h3><p id="empty-description">Ajoutez le matériel que vous avez sous la main.</p></div>
+      </section>
+      <footer>Un outil qui sert, c'est une bonne idée qui avance.<span>Toolbox Share · Première édition</span></footer>
+    </main>
+  </div>
+  <template id="tool-template">
+    <article class="tool-card">
+      <div class="tool-visual"><img class="tool-illustration" alt="" width="76" height="76"><span class="sharing-badge"></span></div>
+      <div class="tool-content"><p class="tool-category"></p><h3></h3><p class="tool-description"></p><div class="tool-bottom"><span class="condition"></span><div class="tool-actions"><button class="icon-button edit" type="button"><img src="assets/icons/pencil.svg" alt=""></button><button class="icon-button delete" type="button"><img src="assets/icons/trash-2.svg" alt=""></button></div></div></div>
+    </article>
+  </template>
+  <dialog id="tool-dialog" aria-labelledby="dialog-title">
+    <form id="tool-form">
+      <div class="dialog-heading"><div><p class="eyebrow">MON INVENTAIRE</p><h2 id="dialog-title">Ajouter un outil</h2></div><button class="icon-button" type="button" id="close-dialog" aria-label="Fermer"><img src="assets/icons/x.svg" alt=""></button></div>
+      <label>Nom de l'outil<input name="name" required maxlength="100" placeholder="Ex. Perceuse sans fil"></label>
+      <div class="form-row"><label>Catégorie<select name="category" required><option value="Percage">Perçage</option><option value="Decoupe">Découpe</option><option value="Jardin">Jardin</option><option value="Mesure">Mesure</option><option value="A main">À main</option><option value="Autre">Autre</option></select></label><label>État<select name="condition" required><option value="Tres bon">Très bon</option><option value="Bon">Bon</option><option value="Usage">Usagé</option></select></label></div>
+      <label>Description<textarea name="description" rows="3" maxlength="1000" placeholder="Marque, accessoires, particularités…"></textarea></label>
+      <label class="checkbox-label"><input type="checkbox" name="shared"><span>Prévoir de partager cet outil<small>Le catalogue public sera disponible lors d'une prochaine étape.</small></span></label>
+      <p id="form-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" id="cancel-dialog" class="button secondary">Annuler</button><button type="submit" id="save-button" class="button primary">Enregistrer l'outil</button></div>
+    </form>
+  </dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title"><form id="delete-form"><h2 id="delete-title">Supprimer cet outil ?</h2><p id="delete-description"></p><p>Cette action est définitive.</p><p id="delete-error" class="form-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" id="cancel-delete" class="button secondary">Conserver</button><button id="confirm-delete" type="submit" class="button danger">Supprimer</button></div></form></dialog>
+</body>
+</html>

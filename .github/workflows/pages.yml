@@ -1,0 +1,67 @@
+name: Tests et GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: node --check public/app.js
+      - run: node --check public/auth.js
+      - run: node --test tests/backend.test.cjs tests/auth.test.cjs
+      - run: python -m unittest discover -s tests -p 'test_*.py' -v
+
+  build:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    environment: github-pages
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Generer uniquement la configuration publique
+        run: python scripts/configure.py --require
+        env:
+          OIDC_AUTHORITY: ${{ vars.OIDC_AUTHORITY || secrets.OIDC_AUTHORITY }}
+          OIDC_CLIENT_ID: ${{ vars.OIDC_CLIENT_ID || secrets.OIDC_CLIENT_ID }}
+          OIDC_SCOPE: ${{ vars.OIDC_SCOPE || secrets.OIDC_SCOPE }}
+          OIDC_AUDIENCE: ${{ vars.OIDC_AUDIENCE || secrets.OIDC_AUDIENCE }}
+          API_URL: ${{ vars.API_URL || secrets.API_URL }}
+          APP_URL: ${{ vars.APP_URL || secrets.APP_URL }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publier le frontend
+        id: deployment
+        uses: actions/deploy-pages@v4

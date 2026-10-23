@@ -1,0 +1,5 @@
+prompt.txt
+.env.local
+public/config.js
+.local/
+__pycache__/
