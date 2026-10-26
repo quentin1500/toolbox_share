@@ -27,14 +27,15 @@ des e-mails, ou faire approuver une evolution vers une cle `iss` + `sub` AVANT u
 ouverture a un public dont les e-mails peuvent etre reattribues. Une migration
 manuelle controlee est decrite dans le guide d'exploitation.
 
-Seule la gestion des outils personnels est active. `shared` exprime une intention,
-sans publication. Profils, contacts, catalogue partage et demandes sont des
-etapes ulterieures decrites dans le document fonctionnel, pas des API presentes.
+La gestion des outils personnels est active. `shared` exprime une intention,
+sans publication. La gestion privee du profil est ajoutee par l'ADR 0006 ;
+catalogue partage et demandes restent des etapes ulterieures.
 
 ## Consequences
 
 Simple pour un petit collectif, mais les limites d'onglets/cellules et les quotas
-Apps Script rendent cette structure inadaptee a une forte croissance. Les futurs
-onglets profils/demandes et leurs ACL necessiteront leurs propres decisions.
+Apps Script rendent cette structure inadaptee a une forte croissance. L'ADR 0006
+definit la feuille et les ACL du profil ; les demandes necessiteront leur propre
+decision.
 Les editeurs directs du classeur restent de confiance et peuvent lire toutes
 les donnees. L'application n'est pas un systeme de confidentialite vis-a-vis d'eux.

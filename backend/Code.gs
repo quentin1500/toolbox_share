@@ -93,21 +93,28 @@ function dispatch_(request) {
   if (!request || typeof request !== 'object') throw new Error('BAD_REQUEST');
   var config = configuration_();
   var identity = verifyJwt_(request.accessToken, config);
-  if (['list', 'create', 'update', 'delete'].indexOf(request.action) < 0) throw new Error('BAD_REQUEST');
+  var actions = ['list', 'create', 'update', 'delete', 'getProfile', 'saveProfile', 'deleteProfile'];
+  if (actions.indexOf(request.action) < 0) throw new Error('BAD_REQUEST');
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) throw new Error('BUSY');
   try {
-    var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, identity.email);
-    var name = 'u_' + digest.map(function (byte) {
-      return ('0' + ((byte + 256) % 256).toString(16)).slice(-2);
-    }).join('');
     var book = SpreadsheetApp.openById(config.SPREADSHEET_ID);
-    var sheet = book.getSheetByName(name);
-    if (!sheet) {
-      sheet = book.insertSheet(name);
+    if (['getProfile', 'saveProfile', 'deleteProfile'].indexOf(request.action) >= 0) {
+      var profiles = profileSheet_(book);
+      if (request.action === 'getProfile') return getProfile_(profiles, identity.email);
+      if (request.action === 'saveProfile') return saveProfile_(profiles, identity.email, request.profile);
+      deleteProfile_(book, profiles, identity.email);
+      return { deleted: true };
+    }
+    var sheetName = userSheetName_(identity.email);
+    var sheet = book.getSheetByName(sheetName);
+    if (!sheet && request.action === 'list') return { email: identity.email, tools: [] };
+    if (!sheet && request.action === 'create') {
+      sheet = book.insertSheet(sheetName);
       sheet.appendRow(['id', 'tool_json']);
       sheet.setFrozenRows(1);
     }
+    if (!sheet) throw new Error('NOT_FOUND');
     var rows = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues() : [];
     if (request.action === 'list') {
       return { email: identity.email, tools: rows.map(function (row) { return JSON.parse(row[1]); }) };
@@ -129,6 +136,89 @@ function dispatch_(request) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function userSheetName_(email) {
+  var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, email);
+  return 'u_' + digest.map(function (byte) {
+    return ('0' + ((byte + 256) % 256).toString(16)).slice(-2);
+  }).join('');
+}
+
+function profileSheet_(book) {
+  var sheet = book.getSheetByName('Profils');
+  if (!sheet) {
+    sheet = book.insertSheet('Profils');
+    sheet.appendRow(['email', 'nom prénom', 'numéro de téléphone', 'adresse physique']);
+    sheet.setFrozenRows(1);
+  }
+  var headers = sheet.getRange(1, 1, 1, 4).getValues()[0];
+  if (headers.join('|') !== 'email|nom prénom|numéro de téléphone|adresse physique') {
+    throw new Error('CONFIGURATION');
+  }
+  return sheet;
+}
+
+function profileRow_(sheet, email) {
+  var rows = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues() : [];
+  var matches = [];
+  rows.forEach(function (row, index) {
+    if (profileValue_(row[0]) === email) matches.push(index + 2);
+  });
+  if (matches.length > 1) throw new Error('INTERNAL');
+  return matches.length ? matches[0] : 0;
+}
+
+function getProfile_(sheet, email) {
+  var row = profileRow_(sheet, email);
+  if (!row) return { name: '', phone: '', address: '' };
+  var values = sheet.getRange(row, 2, 1, 3).getValues()[0];
+  return {
+    name: profileValue_(values[0]),
+    phone: profileValue_(values[1]),
+    address: profileValue_(values[2])
+  };
+}
+
+function saveProfile_(sheet, email, input) {
+  var profile = validateProfile_(input);
+  var row = profileRow_(sheet, email);
+  var values = [email, profile.name, profile.phone, profile.address].map(sheetText_);
+  if (row) sheet.getRange(row, 1, 1, 4).setValues([values]);
+  else sheet.appendRow(values);
+  return profile;
+}
+
+function deleteProfile_(book, profiles, email) {
+  var row = profileRow_(profiles, email);
+  if (row) profiles.deleteRow(row);
+  var tools = book.getSheetByName(userSheetName_(email));
+  if (tools) book.deleteSheet(tools);
+}
+
+function validateProfile_(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('BAD_REQUEST');
+  var limits = { name: 120, phone: 50, address: 500 };
+  var profile = {};
+  Object.keys(limits).forEach(function (key) {
+    var supplied = input[key] === undefined ? '' : input[key];
+    if (typeof supplied !== 'string' || /[\u0000-\u001f\u007f\u2028\u2029]/.test(supplied)) {
+      throw new Error('BAD_REQUEST');
+    }
+    var value = supplied.trim();
+    if (value.length > limits[key]) throw new Error('BAD_REQUEST');
+    profile[key] = value;
+  });
+  return profile;
+}
+
+function sheetText_(value) {
+  return /^[=+\-@]/.test(value) ? "'" + value : value;
+}
+
+function profileValue_(value) {
+  var text = String(value || '');
+  return /^'(?=[=+\-@])/.test(text) ? text.slice(1) : text;
 }
 
 function validateTool_(input) {

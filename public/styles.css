@@ -236,6 +236,15 @@ textarea:focus-visible {
   background: #f6e3de;
 }
 
+.account-menu-options #profile-button:hover {
+  color: var(--green-dark);
+  background: var(--green-light);
+}
+
+.account-menu-options #delete-profile-button {
+  color: #8f3027;
+}
+
 .account-menu-options img {
   width: 17px;
   height: 17px;
@@ -914,9 +923,19 @@ form textarea {
   margin-top: 12px;
 }
 
+#profile-delete-form > p {
+  margin-top: 12px;
+}
+
 #delete-description {
   overflow-wrap: anywhere;
   font-weight: 650;
+}
+
+.profile-help {
+  margin: -10px 0 18px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 @keyframes arrive {

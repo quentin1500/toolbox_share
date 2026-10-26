@@ -35,11 +35,22 @@ peut toujours appeler l'API. La validation des bearer tokens reste obligatoire.
   Avec `OIDC_REQUIRE_EMAIL_VERIFIED=false`, la garantie repose sur le fournisseur :
   il doit imposer la confirmation de l'e-mail avant la connexion et ne pas laisser
   l'utilisateur modifier le claim `email`. Ne jamais se fier a `user_metadata`.
+- Le profil prive est stocke dans la feuille `Profils`. Son email cle et la
+  suppression de l'onglet d'outils sont derives exclusivement du JWT verifie ;
+  toute valeur `email` ou tout nom de feuille fourni dans le corps est ignore.
+  Aucune lecture de profil n'est retournee a un autre compte.
+- Les champs du profil sont bornes en taille, tous optionnels et refusent les
+  caracteres de controle, notamment les sauts de ligne. Les valeurs sont
+  protegees contre l'interpretation comme formules Sheets. Le numero de telephone et
+  l'adresse physique sont des donnees personnelles : ne pas les rendre publics
+  ni les inclure dans les journaux.
 - Validation serveur des longueurs/types/enumerations et corps limite a 20 000
   caracteres. Cette limite est applicative, pas une limite au niveau reseau.
 - Affichage par `textContent` et formulaires, pas d'injection HTML depuis les
   champs utilisateur ; stockage des champs dans du JSON, pas dans des formules.
 - Verrou Apps Script couvrant lecture/ecriture ; erreurs generiques sans stack.
+- La suppression de profil exige une confirmation dans l'interface, efface la
+  ligne de profil et l'onglet d'outils lie au JWT ; la liste ne recree pas l'onglet.
 - Referrer-Policy no-referrer, dependances locales et perimetre de publication
   limite a `public/`. Pas de donnees de demonstration sauvegardees.
 
@@ -71,6 +82,9 @@ signes par une cle de test RSA 2048, et des services Google simules. Il couvre
 CRUD, tentative d'acces croise, signature d'une autre cle, expiration absente ou
 depassee, mauvais issuer/audience, e-mail absent/non verifie, `nbf` futur,
 algorithme interdit, cle inconnue, en-tete critique, validation et erreurs.
+Il verifie aussi l'isolation des profils, le refus de sauts de ligne, les champs
+vides, l'echappement des valeurs de type formule et la suppression coordonnee
+du profil et de son onglet sans effet sur un autre compte.
 Il verifie egalement le succes avec les scopes OIDC standard ou sans claim
 `scope`, ainsi que le refus d'une audience client meme en l'absence de ce claim.
 
@@ -93,4 +107,8 @@ Verifier a 1440 px et 390 px (et a 320 px minimum), sans debordement horizontal,
 images chargees, modales utilisables au clavier, focus visible et controles
 accessibles. Tester ajout, edition, suppression annulee/confirmee, recherche sans
 resultat, filtres combines et caracteres HTML affiches comme texte. Le mode
-demonstration doit toujours etre distingue de l'espace connecte.
+demonstration doit toujours etre distingue de l'espace connecte. Avec un compte
+connecte, tester l'ouverture, l'enregistrement et l'effacement individuel des
+champs du profil, puis l'annulation et la confirmation de sa suppression.
+Confirmer avec deux comptes que la suppression ne touche que le profil et
+l'onglet d'outils du compte actif.

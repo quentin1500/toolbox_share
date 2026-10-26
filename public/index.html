@@ -25,6 +25,8 @@
         </button>
         <div id="account-menu-options" class="account-menu-options" role="menu" hidden>
           <p id="account-menu-email" class="account-menu-email"></p>
+          <button id="profile-button" type="button" role="menuitem"><img src="assets/icons/users.svg" alt="">Mon profil</button>
+          <button id="delete-profile-button" class="menu-danger" type="button" role="menuitem"><img src="assets/icons/trash-2.svg" alt="">Supprimer mon profil</button>
           <button id="logout-button" type="button" role="menuitem"><img src="assets/icons/log-out.svg" alt="">Se déconnecter</button>
         </div>
       </div>
@@ -86,5 +88,24 @@
     </form>
   </dialog>
   <dialog id="delete-dialog" aria-labelledby="delete-title"><form id="delete-form"><h2 id="delete-title">Supprimer cet outil ?</h2><p id="delete-description"></p><p>Cette action est définitive.</p><p id="delete-error" class="form-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" id="cancel-delete" class="button secondary">Conserver</button><button id="confirm-delete" type="submit" class="button danger">Supprimer</button></div></form></dialog>
+  <dialog id="profile-dialog" aria-labelledby="profile-title">
+    <form id="profile-form">
+      <div class="dialog-heading"><div><p class="eyebrow">VOTRE COMPTE</p><h2 id="profile-title">Mon profil</h2></div><button class="icon-button" type="button" id="close-profile-dialog" aria-label="Fermer"><img src="assets/icons/x.svg" alt=""></button></div>
+      <p class="profile-help">Ces informations restent privées et peuvent être effacées à tout moment.</p>
+      <label>Nom et prénom<input name="name" autocomplete="name" maxlength="120"></label>
+      <label>Numéro de téléphone<input name="phone" type="tel" autocomplete="tel" maxlength="50"></label>
+      <label>Adresse physique<input name="address" autocomplete="street-address" maxlength="500"></label>
+      <p id="profile-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" id="cancel-profile-dialog" class="button secondary">Annuler</button><button type="submit" id="save-profile-button" class="button primary">Enregistrer</button></div>
+    </form>
+  </dialog>
+  <dialog id="profile-delete-dialog" aria-labelledby="profile-delete-title">
+    <form id="profile-delete-form">
+      <h2 id="profile-delete-title">Supprimer votre profil ?</h2>
+      <p>Cette action supprimera définitivement vos informations de profil et l’onglet contenant tous vos outils. Elle ne peut pas être annulée.</p>
+      <p id="profile-delete-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" id="cancel-profile-delete" class="button secondary">Garder mon profil</button><button type="submit" id="confirm-profile-delete" class="button danger">Tout supprimer</button></div>
+    </form>
+  </dialog>
 </body>
 </html>

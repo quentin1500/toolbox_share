@@ -39,6 +39,32 @@ function es256Token(overrides = {}, headerOverrides = {}, signingKey = ec.privat
 
 function runtime(extra = {}) {
   const sheets = new Map();
+  const book = {
+    getSheetByName: name => sheets.get(name),
+    insertSheet: name => {
+      const rows = [];
+      const sheet = {
+        appendRow: row => rows.push(row),
+        setFrozenRows: () => {},
+        getLastRow: () => rows.length,
+        getRange: (start, column, count, width) => ({
+          getValues: () => rows.slice(start - 1, start - 1 + count)
+            .map(row => row.slice(column - 1, column - 1 + width)),
+          setValues: values => values.forEach((value, index) => {
+            const rowIndex = start - 1 + index;
+            if (!rows[rowIndex]) rows[rowIndex] = [];
+            value.forEach((cell, cellIndex) => { rows[rowIndex][column - 1 + cellIndex] = cell; });
+          })
+        }),
+        deleteRow: row => rows.splice(row - 1, 1)
+      };
+      sheets.set(name, sheet);
+      return sheet;
+    },
+    deleteSheet: sheet => {
+      for (const [name, value] of sheets) if (value === sheet) sheets.delete(name);
+    }
+  };
   const context = vm.createContext({
     console,
     PropertiesService: { getScriptProperties: () => ({ getProperties: () => ({ ...config, ...extra }) }) },
@@ -54,25 +80,11 @@ function runtime(extra = {}) {
       getUuid: crypto.randomUUID
     },
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: value => ({ setMimeType: () => JSON.parse(value) }) },
-    SpreadsheetApp: { openById: () => ({
-      getSheetByName: name => sheets.get(name),
-      insertSheet: name => {
-        const rows = [];
-        const sheet = {
-          appendRow: row => rows.push(row), setFrozenRows: () => {}, getLastRow: () => rows.length,
-          getRange: (start, _, count) => ({
-            getValues: () => rows.slice(start - 1, start - 1 + count),
-            setValues: values => { rows[start - 1] = values[0]; }
-          }),
-          deleteRow: row => rows.splice(row - 1, 1)
-        };
-        sheets.set(name, sheet);
-        return sheet;
-      }
-    }) }
+    SpreadsheetApp: { openById: () => book }
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../backend/vendor/jsrsasign.gs'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../backend/Code.gs'), 'utf8'), context);
+  context.__sheets = sheets;
   return context;
 }
 
@@ -90,6 +102,76 @@ test('signed access token accepted; full CRUD isolated by verified email', () =>
   assert.throws(() => api.dispatch_({ action: 'delete', accessToken: bob, id: created.id }), /NOT_FOUND/);
   api.dispatch_({ action: 'delete', accessToken, id: created.id });
   assert.equal(api.dispatch_({ action: 'list', accessToken }).tools.length, 0);
+});
+
+test('profiles are derived from the verified email and isolated from other users', () => {
+  const api = runtime();
+  const aliceToken = token();
+  const bobToken = token({ email: 'bob@example.com', sub: 'bob' });
+  const empty = api.dispatch_({ action: 'getProfile', accessToken: aliceToken });
+  assert.equal(empty.name, '');
+  assert.equal(empty.phone, '');
+  assert.equal(empty.address, '');
+
+  const aliceProfile = { name: 'Alice Exemple', phone: '+33 6 12 34 56 78', address: '1 rue des Outils' };
+  api.dispatch_({
+    action: 'saveProfile', accessToken: aliceToken, email: 'bob@example.com',
+    profile: { ...aliceProfile, email: 'bob@example.com' }
+  });
+  const bobProfile = { name: 'Bob Exemple', phone: '', address: '2 place du Marteau' };
+  api.dispatch_({ action: 'saveProfile', accessToken: bobToken, profile: bobProfile });
+  assert.equal(api.dispatch_({ action: 'getProfile', accessToken: aliceToken }).name, aliceProfile.name);
+  assert.equal(api.dispatch_({ action: 'getProfile', accessToken: bobToken }).name, bobProfile.name);
+  assert.equal(api.__sheets.get('Profils').getRange(1, 1, 3, 4).getValues()[0][0], 'email');
+
+  assert.throws(() => api.dispatch_({
+    action: 'saveProfile', accessToken: aliceToken,
+    profile: { ...aliceProfile, address: '1 rue des Outils\nbob@example.com' }
+  }), /BAD_REQUEST/);
+  assert.throws(() => api.dispatch_({
+    action: 'saveProfile', accessToken: aliceToken,
+    profile: { ...aliceProfile, name: '\nAlice Exemple' }
+  }), /BAD_REQUEST/);
+  assert.throws(() => api.dispatch_({
+    action: 'saveProfile', accessToken: aliceToken,
+    profile: { ...aliceProfile, name: 'A'.repeat(121) }
+  }), /BAD_REQUEST/);
+
+  const aliceTool = api.dispatch_({ action: 'create', accessToken: aliceToken, tool });
+  api.dispatch_({ action: 'create', accessToken: bobToken, tool: { ...tool, name: 'Marteau' } });
+  api.dispatch_({ action: 'deleteProfile', accessToken: aliceToken, email: 'bob@example.com' });
+  assert.equal(api.__sheets.has(api.userSheetName_('alice@example.com')), false);
+  assert.equal(api.__sheets.has(api.userSheetName_('bob@example.com')), true);
+  assert.equal(api.dispatch_({ action: 'getProfile', accessToken: bobToken }).name, bobProfile.name);
+  assert.equal(api.dispatch_({ action: 'list', accessToken: aliceToken }).tools.length, 0);
+  assert.equal(api.__sheets.has(api.userSheetName_('alice@example.com')), false);
+  assert.ok(aliceTool.id);
+});
+
+test('profile save allows clearing optional fields and stores formula-like text safely', () => {
+  const api = runtime();
+  const accessToken = token();
+  const formulaText = { name: '=1+1', address: 'Rue du Test' };
+  api.dispatch_({ action: 'saveProfile', accessToken, profile: formulaText });
+  assert.equal(api.__sheets.get('Profils').getRange(2, 1, 1, 4).getValues()[0][1], "'=1+1");
+  assert.equal(api.dispatch_({ action: 'getProfile', accessToken }).name, '=1+1');
+  assert.equal(api.dispatch_({ action: 'getProfile', accessToken }).phone, '');
+  api.dispatch_({ action: 'saveProfile', accessToken, profile: { name: '', phone: '', address: '' } });
+  const result = api.dispatch_({ action: 'getProfile', accessToken });
+  assert.equal(result.name, '');
+  assert.equal(result.phone, '');
+  assert.equal(result.address, '');
+});
+
+test('duplicate profile email rows fail closed', () => {
+  const api = runtime();
+  const accessToken = token();
+  api.dispatch_({ action: 'saveProfile', accessToken, profile: { name: 'Alice', phone: '', address: '' } });
+  api.__sheets.get('Profils').appendRow(['alice@example.com', 'Intrus', '', '']);
+  assert.throws(() => api.dispatch_({ action: 'getProfile', accessToken }), /INTERNAL/);
+  assert.throws(() => api.dispatch_({
+    action: 'saveProfile', accessToken, profile: { name: 'Alice', phone: '', address: '' }
+  }), /INTERNAL/);
 });
 
 test('accept standard OIDC scopes without requiring a scope claim in the access token', () => {

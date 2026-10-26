@@ -7,7 +7,7 @@
   const categories = { Percage: 'drill', Decoupe: 'axe', Jardin: 'shovel', Mesure: 'ruler', 'A main': 'hammer', Autre: 'wrench' };
   const categoryLabels = { Percage: 'Perçage', Decoupe: 'Découpe', Jardin: 'Jardin', Mesure: 'Mesure', 'A main': 'À main', Autre: 'Autre' };
   const conditionLabels = { 'Tres bon': 'Très bon', Bon: 'Bon', Usage: 'Usagé' };
-  const state = { tools: [], user: null, manager: null, busy: false, editing: null, deleting: null };
+  const state = { tools: [], profile: { name: '', phone: '', address: '' }, user: null, manager: null, busy: false, editing: null, deleting: null };
   const demoTools = [
     { id: 'demo-1', name: 'Perceuse sans fil', category: 'Percage', description: 'Bosch 18 V · 2 batteries et coffret de forets', condition: 'Tres bon', shared: true },
     { id: 'demo-2', name: 'Scie sauteuse', category: 'Decoupe', description: 'Makita · Lames bois et métal incluses', condition: 'Bon', shared: true },
@@ -20,7 +20,7 @@
     UNAUTHORIZED: 'Votre session a expiré ou le jeton est invalide. Reconnectez-vous.',
     FORBIDDEN: "Le jeton ne contient pas les droits ou l'e-mail vérifié attendus. Contactez l'administrateur.",
     NOT_FOUND: "Cet outil n'existe plus. Actualisez votre inventaire.",
-    BAD_REQUEST: 'Les informations de cet outil ne sont pas valides.',
+    BAD_REQUEST: 'Les informations saisies ne sont pas valides.',
     BUSY: 'Le service est occupé. Réessayez dans quelques instants.',
     CONFIGURATION: 'La configuration du serveur est incomplète.',
     INTERNAL: 'Le serveur a rencontré une erreur. Réessayez plus tard.'
@@ -37,10 +37,10 @@
   function setBusy(value) {
     state.busy = value;
     $('#tool-grid').setAttribute('aria-busy', String(value));
-    ['#save-button', '#confirm-delete', '#refresh-button', '#auth-button', '#account-button', '#logout-button'].forEach(selector => { $(selector).disabled = value; });
+    ['#save-button', '#confirm-delete', '#refresh-button', '#auth-button', '#account-button', '#profile-button', '#delete-profile-button', '#logout-button', '#save-profile-button', '#confirm-profile-delete'].forEach(selector => { $(selector).disabled = value; });
     $('#add-button').disabled = value || !canEdit();
     document.querySelectorAll('.edit, .delete').forEach(button => { button.disabled = value; });
-    ['#close-dialog', '#cancel-dialog', '#cancel-delete'].forEach(selector => { $(selector).disabled = value; });
+    ['#close-dialog', '#cancel-dialog', '#cancel-delete', '#close-profile-dialog', '#cancel-profile-dialog', '#cancel-profile-delete'].forEach(selector => { $(selector).disabled = value; });
   }
 
   function render() {
@@ -108,7 +108,10 @@
       return result.data;
     } catch (error) {
       if (Object.values(messages).includes(error.message)) throw error;
-      throw new Error(action === 'list' ? 'Connexion au serveur impossible. Vérifiez le réseau et le déploiement Apps Script.' : "Confirmation impossible. L'action a peut-être abouti : actualisez avant de réessayer.");
+      if (action === 'list' || action === 'getProfile') throw new Error('Connexion au serveur impossible. Vérifiez le réseau et le déploiement Apps Script.');
+      if (action === 'saveProfile') throw new Error("Enregistrement impossible. Vos informations n'ont peut-être pas été sauvegardées.");
+      if (action === 'deleteProfile') throw new Error("La suppression a peut-être été partielle. Vérifiez vos données avant de réessayer.");
+      throw new Error("Confirmation impossible. L'action a peut-être abouti : actualisez avant de réessayer.");
     } finally {
       clearTimeout(timer);
     }
@@ -178,9 +181,60 @@
     finally { setBusy(false); render(); }
   }
 
+  async function openProfile() {
+    if (state.busy || !state.user) return;
+    closeAccountMenu();
+    setBusy(true);
+    $('#profile-error').hidden = true;
+    try {
+      state.profile = await request('getProfile');
+      const form = $('#profile-form');
+      for (const key of ['name', 'phone', 'address']) form.elements.namedItem(key).value = state.profile[key];
+      $('#profile-dialog').showModal();
+      form.elements.namedItem('name').focus();
+    } catch (error) {
+      notice(error.message, true);
+    } finally { setBusy(false); }
+  }
+
+  async function saveProfile(event) {
+    event.preventDefault();
+    if (state.busy) return;
+    const data = new FormData(event.target);
+    const profile = Object.fromEntries(['name', 'phone', 'address'].map(key => [key, String(data.get(key) || '').trim()]));
+    setBusy(true);
+    $('#profile-error').hidden = true;
+    try {
+      state.profile = await request('saveProfile', { profile });
+      $('#profile-dialog').close();
+      notice('Profil enregistré.');
+    } catch (error) {
+      $('#profile-error').textContent = error.message;
+      $('#profile-error').hidden = false;
+    } finally { setBusy(false); }
+  }
+
+  async function deleteProfile(event) {
+    event.preventDefault();
+    if (state.busy) return;
+    setBusy(true);
+    $('#profile-delete-error').hidden = true;
+    try {
+      await request('deleteProfile');
+      state.profile = { name: '', phone: '', address: '' };
+      state.tools = [];
+      $('#profile-delete-dialog').close();
+      notice('Votre profil et votre boîte à outils ont été supprimés.');
+    } catch (error) {
+      $('#profile-delete-error').textContent = error.message;
+      $('#profile-delete-error').hidden = false;
+    } finally { setBusy(false); render(); }
+  }
+
   async function clearSession() {
     state.user = null;
     state.tools = [];
+    state.profile = { name: '', phone: '', address: '' };
     await state.manager?.removeUser();
     closeAccountMenu();
     $('#account-menu').hidden = true;
@@ -223,6 +277,13 @@
       options.hidden = !options.hidden;
       $('#account-button').setAttribute('aria-expanded', String(!options.hidden));
     });
+    $('#profile-button').addEventListener('click', openProfile);
+    $('#delete-profile-button').addEventListener('click', () => {
+      closeAccountMenu();
+      $('#profile-delete-error').hidden = true;
+      $('#profile-delete-dialog').showModal();
+      $('#cancel-profile-delete').focus();
+    });
     $('#logout-button').addEventListener('click', async () => {
       closeAccountMenu();
       await clearSession();
@@ -240,9 +301,13 @@
     for (const selector of ['#search', '#category-filter', '#sharing-filter']) $(selector).addEventListener('input', render);
     $('#tool-form').addEventListener('submit', saveTool);
     $('#delete-form').addEventListener('submit', deleteTool);
+    $('#profile-form').addEventListener('submit', saveProfile);
+    $('#profile-delete-form').addEventListener('submit', deleteProfile);
     for (const selector of ['#close-dialog', '#cancel-dialog']) $(selector).addEventListener('click', () => $('#tool-dialog').close());
     $('#cancel-delete').addEventListener('click', () => $('#delete-dialog').close());
-    for (const selector of ['#tool-dialog', '#delete-dialog']) $(selector).addEventListener('cancel', event => { if (state.busy) event.preventDefault(); });
+    for (const selector of ['#close-profile-dialog', '#cancel-profile-dialog']) $(selector).addEventListener('click', () => $('#profile-dialog').close());
+    $('#cancel-profile-delete').addEventListener('click', () => $('#profile-delete-dialog').close());
+    for (const selector of ['#tool-dialog', '#delete-dialog', '#profile-dialog', '#profile-delete-dialog']) $(selector).addEventListener('cancel', event => { if (state.busy) event.preventDefault(); });
     if (!configured) { state.tools = structuredClone(demoTools); render(); return; }
     $('#mode-status').hidden = true;
     try {

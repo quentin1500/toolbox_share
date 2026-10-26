@@ -65,12 +65,16 @@ pas directement compatible avec ce contrat. Ne pas envoyer l'ID token a la place
 6. Relever l'URL de production se terminant par `/exec`, pas `/dev`. La renseigner
    dans `API_URL`. Un appel invalide doit retourner du JSON `ok:false`, pas une
    page de connexion Google. Les onglets personnels seront crees automatiquement.
+   La feuille `Profils` est creee automatiquement au premier acces au profil et
+   porte les colonnes `email`, `nom prénom`, `numéro de téléphone` et `adresse physique`.
 7. Faire la recette navigateur ci-dessous AVANT publication. Certaines politiques
    Workspace interdisent les web apps anonymes ; ne pas contourner cette regle.
 
 Un classeur neuf peut garder son onglet initial vide. Le code ne le supprime pas.
 Les lignes personnelles ont deux colonnes `id` et `tool_json` ; ne pas modifier
-manuellement leur schema. Ne jamais y stocker de tokens.
+manuellement leur schema. La feuille `Profils` est privee ; ne pas modifier ses
+quatre en-tetes, ne jamais y stocker de tokens, et limiter l'acces au classeur
+aux responsables de confiance.
 
 ## 3. Configuration locale
 
@@ -132,6 +136,16 @@ client, meme temporairement. GitHub Pages n'offre pas de serveur pour le cacher.
   vers `script.googleusercontent.com`. Ne pas essayer de corriger avec `no-cors`.
 - Avec deux comptes, creer/modifier/supprimer et verifier l'isolation des onglets.
   Tenter un UUID du premier compte avec le second : `NOT_FOUND`.
+- Avec deux comptes, consulter et enregistrer des profils differents ; tenter
+  d'ajouter un e-mail ou un nom de feuille falsifie au corps et verifier que
+  seule l'identite du JWT est utilisee. Verifier que les champs vides sont
+  acceptes et qu'un retour a la ligne est refuse.
+- Annuler la confirmation de suppression du profil et verifier qu'aucune donnee
+  ne change. La confirmer ensuite : seule la ligne du compte et son onglet
+  d'outils doivent disparaitre ; un rechargement ne doit pas recreer l'onglet.
+  Verifier que l'autre compte reste intact. Si une erreur survient pendant les
+  deux suppressions Sheets, verifier les deux donnees et relancer l'action si
+  necessaire.
 - Verifier refus d'un JWT expire, falsifie, d'un autre issuer/audience ou sans
    e-mail verifie ; verifier aussi le refus d'un ID token.
 - Verifier que les seuls scopes demandes sont `openid email profile` et que
@@ -179,8 +193,13 @@ le deploiement), faire une copie privee du classeur, calculer SHA-256 de l'ancie
 et du nouvel e-mail normalises, puis renommer l'onglet `u_<ancien hash>` en
 `u_<nouveau hash>`. Ne pas ecraser un onglet cible deja existant : une fusion
 necessite une verification manuelle des UUID et du proprietaire. Retablir le
-deploiement et tester avec le nouveau JWT. Pour une suppression, retirer l'onglet
-et appliquer votre politique de conservation aux copies et historiques Google.
+deploiement et tester avec le nouveau JWT. Pour migrer aussi le profil, remplacer
+la cle e-mail de sa ligne dans `Profils`, apres verification de l'absence de
+doublon. Pour une suppression de compte hors de l'application, retirer l'onglet
+et la ligne de profil, puis appliquer votre politique de conservation aux copies
+et historiques Google. L'action « Supprimer mon profil » dans l'application
+supprime ces deux donnees pour l'utilisateur authentifie, mais ne supprime pas
+son compte chez le fournisseur d'identite.
 
 ### Limites connues
 

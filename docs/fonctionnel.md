@@ -41,9 +41,10 @@ stockees, affichees respectivement « Très bon » et « Usagé ». Les controle
 filtres, formulaires et demonstrations suivent cette correspondance.
 
 Apres connexion, l'adresse du compte est affichee de maniere concise dans un
-bouton visible egalement sur smartphone. Ce bouton ouvre un menu de compte dont
-la seule option active est la deconnexion. En haut du menu, l'adresse complete
-est affichee sans troncature ; elle revient a la ligne sur les petits ecrans.
+bouton visible egalement sur smartphone. Ce bouton ouvre un menu de compte avec
+les actions « Mon profil », « Supprimer mon profil » et la deconnexion. En haut
+du menu, l'adresse complete est affichee sans troncature ; elle revient a la
+ligne sur les petits ecrans.
 L'adresse du profil OIDC est presentee des le retour de connexion, puis confirmee
 par la reponse du backend ; aucune
 adresse saisie ni information de profil du navigateur n'autorise une operation.
@@ -70,6 +71,7 @@ flowchart LR
   Script -->|JWKS fixe / cache 5 min| IdP
   Script -->|Identite verifiee et verrou| Sheet[Google Sheet prive]
   Sheet --> UserTab[Onglet u_SHA256 email]
+  Sheet --> ProfileTab[Feuille Profils]
 ```
 
 ## Connexion et gestion des jetons
@@ -145,6 +147,48 @@ gestion des conflits multi-onglets ni d'idempotence dans cette version.
 En cas de reseau coupe pendant une mutation, son resultat peut etre inconnu :
 actualiser avant de reessayer, afin d'eviter une creation en double.
 
+## Profil personnel
+
+Le menu du compte permet de consulter et modifier les champs nom et prenom,
+numero de telephone et adresse physique. Chaque champ est facultatif et peut
+etre vide individuellement ; une sauvegarde avec les trois champs vides conserve
+une ligne identifiee par l'e-mail dans `Profils`. La feuille comporte les colonnes
+`email`, `nom prénom`, `numéro de téléphone` et `adresse physique`. Elle est
+privee, ne sert pas au catalogue et n'est jamais exposee aux autres utilisateurs.
+
+Le navigateur n'envoie pas d'e-mail ni de numero de ligne pour autoriser ces
+operations. Apps Script derive l'e-mail de l'access token verifie, puis lit ou
+modifie exclusivement la ligne correspondante. Nom, telephone et adresse sont
+limites respectivement a 120, 50 et 500 caracteres ; les caracteres de controle,
+dont les retours a la ligne, sont refuses. Les valeurs susceptibles d'etre
+interpretees comme formules Sheets sont protegees comme texte.
+
+« Supprimer mon profil » ouvre une confirmation qui precise que l'action efface
+la ligne de profil et l'onglet contenant tous les outils de l'utilisateur.
+L'action est irreversible depuis l'application. Le jeton OIDC et le compte chez
+le fournisseur ne sont pas supprimes ; un utilisateur toujours connecte peut
+creer de nouvelles donnees. La liste vide ne recree pas l'onglet d'outils ; celui-ci
+est recree seulement lors d'un nouvel ajout d'outil.
+
+```mermaid
+sequenceDiagram
+  actor U as Utilisateur
+  participant F as Frontend
+  participant A as Apps Script
+  participant G as Google Sheet prive
+  U->>F: Ouvrir ou enregistrer son profil
+  F->>A: getProfile ou saveProfile + access token
+  A->>A: Verifier le JWT et prendre le verrou
+  A->>G: Lire ou modifier la ligne de l'e-mail signe
+  G-->>A: Champs du profil de cet utilisateur
+  A-->>F: Profil personnel uniquement
+  U->>F: Confirmer la suppression du profil
+  F->>A: deleteProfile + access token
+  A->>A: Deriver l'e-mail et l'onglet d'outils du JWT
+  A->>G: Supprimer sa ligne Profils et son onglet d'outils
+  A-->>F: Suppression confirmee
+```
+
 ## Contrat de l'API
 
 Toutes les operations : `POST API_URL`, `Content-Type: text/plain;charset=UTF-8`,
@@ -156,6 +200,9 @@ corps JSON. `accessToken` est present a chaque appel. Aucun en-tete Authorizatio
 | `create` | `tool` | Outil complet avec UUID et dates |
 | `update` | `id`, `tool` | Outil complet mis a jour |
 | `delete` | `id` | `{id}` |
+| `getProfile` | Aucun | `{name, phone, address}` pour l'e-mail du JWT |
+| `saveProfile` | `profile: {name, phone, address}` | Profil sauvegarde |
+| `deleteProfile` | Aucun | `{deleted: true}` apres suppression de la ligne de profil et de l'onglet d'outils correspondant |
 
 Exemple de `tool` :
 
@@ -172,17 +219,16 @@ cryptographique. Les erreurs HTTP et les erreurs applicatives sont distinctes.
 
 | Etape | Fonctionnalite | Decisions et criteres avant livraison |
 | --- | --- | --- |
-| 2 | Profil : nom affiche, zone geographique, moyens de contact | ADR schema et visibilite, consentement de publication, validation des liens de contact, ACL de modification du profil |
-| 3 | Catalogue des outils partages des autres utilisateurs | ADR index partage, filtrage serveur sur `shared`, exclusion des champs prives, pagination et quotas ; jamais lecture libre de tous les onglets |
-| 4 | Demande d'emprunt au proprietaire | ADR demandes : proprietaire/demandeur, dates, etats, permissions, prevention spam ; contact uniquement selon les moyens consentis |
-| 5 | Suivi des prets et notifications | Accepter/refuser/annuler, retour du materiel, disponibilite et concurrence ; pas de notification sans consentement |
+| 2 | Catalogue des outils partages des autres utilisateurs | ADR index partage, filtrage serveur sur `shared`, exclusion des champs prives, pagination et quotas ; jamais lecture libre de tous les onglets |
+| 3 | Demande d'emprunt au proprietaire | ADR demandes : proprietaire/demandeur, dates, etats, permissions, prevention spam ; contact uniquement selon les moyens consentis |
+| 4 | Suivi des prets et notifications | Accepter/refuser/annuler, retour du materiel, disponibilite et concurrence ; pas de notification sans consentement |
 
 Flux cible pour les etapes 3 et 4 :
 
 ```mermaid
 flowchart LR
   A[Utilisateur connecte] --> B[Catalogue partage filtre cote serveur]
-  B --> C[Outil et profil public du proprietaire]
+  B --> C[Outil et moyen de contact consenti]
   C --> D[Demande d'emprunt]
   D --> E[Controle des ACL et enregistrement demande]
   E --> F[Contact par un moyen consenti]
