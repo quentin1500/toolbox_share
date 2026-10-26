@@ -83,6 +83,54 @@ test('real OIDC library generates authorization code + PKCE S256, state and nonc
   }
   const withRefresh = { ...user, refresh_token: 'ignored' };
   assert.equal(context.ToolboxAuth.validateUser(withRefresh, configuration).refresh_token, undefined);
+  assert.throws(
+    () => context.ToolboxAuth.validateUser({ ...user, expires_at: Math.floor(Date.now() / 1000) - 1 }, configuration),
+    /access token expired/
+  );
+  const storedValues = new Map();
+  const backingStorage = {
+    get length() { return storedValues.size; },
+    key(index) { return Array.from(storedValues.keys())[index] || null; },
+    getItem(key) { return storedValues.get(key) || null; },
+    setItem(key, value) { storedValues.set(key, String(value)); },
+    removeItem(key) { storedValues.delete(key); }
+  };
+  const persistentStorage = context.ToolboxAuth.createPersistentUserStorage(backingStorage);
+  persistentStorage.setItem('oidc.user:toolbox-spa', JSON.stringify({
+    access_token: 'persisted-access-token',
+    id_token: 'persisted-id-token',
+    refresh_token: 'must-not-be-stored',
+    profile: { email: 'alice@example.test' }
+  }));
+  const persistedUser = JSON.parse(backingStorage.getItem('oidc.user:toolbox-spa'));
+  assert.equal(persistedUser.access_token, 'persisted-access-token');
+  assert.equal(persistedUser.id_token, 'persisted-id-token');
+  assert.equal(persistedUser.refresh_token, undefined);
+  const oidcUser = new library.User({
+    access_token: 'reload-access-token',
+    id_token: 'reload-id-token',
+    refresh_token: 'must-not-survive-reload',
+    userState: { nonce: 'reload-nonce' },
+    profile: {
+      email: 'alice@example.test',
+      iss: 'https://identity.example/',
+      sub: 'alice',
+      aud: 'toolbox-spa',
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 300,
+      nonce: 'reload-nonce'
+    },
+    expires_at: Math.floor(Date.now() / 1000) + 300
+  });
+  const userStore = new library.WebStorageStateStore({ store: persistentStorage });
+  await userStore.set('user:toolbox-spa', oidcUser.toStorageString());
+  const restoredUser = library.User.fromStorageString(await userStore.get('user:toolbox-spa'));
+  assert.equal(restoredUser.access_token, 'reload-access-token');
+  assert.equal(restoredUser.profile.email, 'alice@example.test');
+  assert.equal(restoredUser.refresh_token, undefined);
+  assert.equal(restoredUser.state, undefined);
+  assert.equal(context.ToolboxAuth.validateUser(restoredUser, configuration, { requireNonce: false }), restoredUser);
+  assert.throws(() => context.ToolboxAuth.validateUser(restoredUser, configuration), /nonce missing/);
   const slashless = { ...user, profile: { ...user.profile, iss: 'https://identity.example' } };
   assert.equal(context.ToolboxAuth.validateUser(slashless, configuration), slashless);
   await assert.rejects(() => client.processSigninResponse('http://localhost:8000/?code=test-code&state=unknown'));

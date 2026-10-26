@@ -1,6 +1,7 @@
 # ADR 0002 : Authentification OIDC et PKCE
 
-Date : 2026-10-23. Statut : Accepte (socle initial).
+Date : 2026-10-23. Statut : Accepte (socle initial ; decision de stockage
+remplacee par ADR 0005).
 
 ## Contexte
 
@@ -24,7 +25,9 @@ Le fournisseur
 doit exposer discovery et token endpoint accessibles par
 CORS depuis les origines du frontend.
 
-Les access tokens et ID tokens restent en memoire via `InMemoryWebStorage`.
+Initialement, les access tokens et ID tokens restaient en memoire via
+`InMemoryWebStorage`. Cette decision de stockage est remplacee par ADR 0005 ;
+les autres decisions OIDC de cet ADR restent en vigueur.
 Seul l'etat transitoire de connexion (state, nonce, code_verifier, URL de retour)
 est place en `sessionStorage` pour survivre a la redirection, puis consomme par la
 bibliotheque. L'URL est nettoyee des codes et erreurs apres callback. Les etats
@@ -33,9 +36,10 @@ abandonnes sont purges avant une nouvelle connexion.
 Ne pas demander `offline_access`. Aucun renouvellement automatique. Si le
 fournisseur renvoie tout de meme un refresh token, il est ignore : jamais utilise
 ni conserve par l'application. L'emission peut etre desactivee si le fournisseur
-le permet. A expiration ou au rechargement complet de la page, une nouvelle connexion
-est requise (la session SSO du fournisseur peut la simplifier). La deconnexion
-efface la session locale, pas la session SSO ni les jetons deja emis.
+le permet. A expiration, une nouvelle connexion est requise (la session SSO du
+fournisseur peut la simplifier). La decision initiale de stockage en memoire a
+ete remplacee par ADR 0005 : un token non expire survit au rechargement. La
+deconnexion efface la session locale, pas la session SSO ni les jetons deja emis.
 
 Le backend recoit exclusivement l'access token, jamais l'ID token. Configurer une
 audience API distincte du client pour eviter leur confusion. Demander uniquement
@@ -53,4 +57,4 @@ Les fournisseurs ne sont pas interchangeables sans configuration : le parametre
 `audience` est optionnel (par exemple Auth0) ; avec Keycloak, utiliser des mappers
 de claims et d'audience et laisser le parametre vide. La version livree ne
 depend pas d'un fournisseur particulier. Un vrai test de connexion reste requis.
-Le stockage en memoire limite la persistance mais ne protege pas d'une XSS active.
+Voir ADR 0005 pour les consequences securite du stockage persistant dans le navigateur.

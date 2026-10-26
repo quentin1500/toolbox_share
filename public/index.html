@@ -16,8 +16,19 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="./" aria-label="Toolbox Share, accueil"><span class="brand-icon"><img src="assets/icons/hammer.svg" alt="" width="23" height="23"></span>Toolbox Share<span class="brand-note">L'ÉQUIPAGE DES OUTILS</span></a>
-    <div class="account"><span id="session-label">Session locale</span><button id="auth-button" class="button secondary" type="button"><img src="assets/icons/log-in.svg" alt="">Se connecter</button></div>
+    <a class="brand" href="./" aria-label="Toolbox Share, accueil"><span class="brand-icon"><img src="assets/icons/hammer.svg" alt="" width="23" height="23"></span>Toolbox Share</a>
+    <div class="account">
+      <button id="auth-button" class="button secondary" type="button"><img src="assets/icons/log-in.svg" alt="">Se connecter</button>
+      <div id="account-menu" class="account-menu" hidden>
+        <button id="account-button" class="account-trigger" type="button" aria-haspopup="menu" aria-expanded="false">
+          <span id="account-email" class="account-email"></span><span class="account-chevron" aria-hidden="true"></span>
+        </button>
+        <div id="account-menu-options" class="account-menu-options" role="menu" hidden>
+          <p id="account-menu-email" class="account-menu-email"></p>
+          <button id="logout-button" type="button" role="menuitem"><img src="assets/icons/log-out.svg" alt="">Se déconnecter</button>
+        </div>
+      </div>
+    </div>
   </header>
   <div class="shell">
     <aside class="sidebar" aria-label="Navigation principale">
@@ -28,9 +39,8 @@
       <div class="sidebar-bottom"><span class="small-dot"></span>Moins acheter, plus partager.</div>
     </aside>
     <main id="outils">
-      <div class="breadcrumb">Mon espace <span>/</span> Ma boîte à outils</div>
       <section class="page-heading">
-        <div><p class="eyebrow">BIENVENUE À BORD</p><h1>Ma boîte à outils<span>.</span></h1><p class="subtitle">Les bons outils font les bons coups de main.</p></div>
+        <div><h1>Ma boîte à outils<span>.</span></h1></div>
         <button id="add-button" class="button primary" type="button"><img src="assets/icons/plus.svg" alt="">Ajouter un outil</button>
       </section>
       <section class="workshop-banner" aria-label="L'esprit Toolbox Share">
@@ -41,7 +51,7 @@
       <section class="inventory-summary" aria-label="Résumé de votre inventaire">
         <div><strong id="total-count">0</strong><span>outils dans ma boîte</span></div>
         <div><strong id="shared-count">0</strong><span>avec partage prévu</span></div>
-        <div class="session-status"><span id="mode-badge" class="badge">Démonstration</span><span id="mode-note">Données temporaires, dans cet onglet uniquement.</span></div>
+        <div id="mode-status" class="session-status"><span id="mode-badge" class="badge">Démonstration</span></div>
       </section>
       <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
       <section class="inventory" aria-labelledby="inventory-title">

@@ -21,6 +21,9 @@ modification et de suppression. Les entrees de navigation « prochaine escale »
 signalent des fonctions futures ; elles ne sont pas des vues ou actions actives.
 La mention de partage sur une fiche indique une intention de partage uniquement :
 elle ne publie pas l'outil dans un catalogue.
+La presentation privilegie les commandes et l'inventaire : elle n'ajoute ni
+baseline sous le nom du produit, ni fil d'Ariane, ni surtitre ou sous-titre
+d'accueil, ni texte generique sur le stockage de l'espace personnel.
 
 L'identite visuelle emploie un fond gris clair, des surfaces gris-vert, des
 accents verts et une touche pirate conviviale, notamment dans les textes
@@ -37,18 +40,25 @@ transmises au serveur. Par exemple, les categories `Percage`, `Decoupe` et
 stockees, affichees respectivement « Très bon » et « Usagé ». Les controles,
 filtres, formulaires et demonstrations suivent cette correspondance.
 
-L'e-mail affiche apres chargement provient de la reponse du backend. Aucune
+Apres connexion, l'adresse du compte est affichee de maniere concise dans un
+bouton visible egalement sur smartphone. Ce bouton ouvre un menu de compte dont
+la seule option active est la deconnexion. En haut du menu, l'adresse complete
+est affichee sans troncature ; elle revient a la ligne sur les petits ecrans.
+L'adresse du profil OIDC est presentee des le retour de connexion, puis confirmee
+par la reponse du backend ; aucune
 adresse saisie ni information de profil du navigateur n'autorise une operation.
-Le bouton de deconnexion ferme la session locale. Un rechargement complet exige
-une nouvelle connexion ; les outils reels restent dans Sheets. L'expiration
-efface l'inventaire local et demande une reconnexion.
+Un rechargement reprend la session
+OIDC persistante tant que l'access token et l'ID token sont valides. A expiration,
+la session locale est effacee et une nouvelle connexion est requise. Les outils
+reels restent dans Sheets.
 
 Sans configuration, une demonstration isolee fonctionne uniquement en memoire,
 sans requete API, sans compte et sans sauvegarde navigateur. Les six exemples
 reviennent au rechargement. Elle n'est pas publiee par le workflow de production.
 La demonstration utilise la meme interface localisee et les memes libelles
 conviviaux que l'inventaire personnel, tout en restant explicitement distinguee
-de l'espace connecte.
+de l'espace connecte par un badge « Démonstration ». L'interface n'affiche pas de
+libelle « Espace personnel » ni de detail de stockage de l'inventaire.
 
 ## Composants
 
@@ -80,7 +90,7 @@ sequenceDiagram
   F->>I: /token code + code_verifier, sans secret
   I-->>F: access_token et id_token
   F->>F: Callback OIDC puis controle local nonce, issuer, audience et dates
-  F->>F: Jetons en memoire, URL nettoyee
+  F->>F: Jetons OIDC persistes dans localStorage (sans refresh token), URL nettoyee
   F->>A: POST list + access_token
   A->>I: JWKS si absent du cache ou kid inconnu
   A->>A: Signature RS256/ES256, issuer, audience, expiration, email verifie
@@ -91,9 +101,11 @@ sequenceDiagram
 ```
 
 L'ID token n'est jamais utilise comme autorisation d'API. Les jetons ne sont ni
-des parametres d'URL, ni des cookies, ni des valeurs de localStorage. Les donnees
-transitoires PKCE sont supprimees lorsqu'elles sont consommees. La page conserve
-les jetons uniquement dans son processus JavaScript. Elle n'effectue aucun
+des parametres d'URL ni des cookies. L'access token et l'ID token sont conserves
+dans `localStorage` pour reprendre la session apres rechargement ; le stockage
+OIDC retire tout refresh token avant ecriture. Les donnees transitoires PKCE
+(state, nonce, code_verifier et URL de retour) restent dans `sessionStorage` et
+sont supprimees lorsqu'elles sont consommees. L'application n'effectue aucun
 rafraichissement silencieux. Le serveur controle l'expiration a chaque operation,
 independamment de l'horloge et des controles du frontend.
 

@@ -37,7 +37,7 @@
   function setBusy(value) {
     state.busy = value;
     $('#tool-grid').setAttribute('aria-busy', String(value));
-    ['#save-button', '#confirm-delete', '#refresh-button', '#auth-button'].forEach(selector => { $(selector).disabled = value; });
+    ['#save-button', '#confirm-delete', '#refresh-button', '#auth-button', '#account-button', '#logout-button'].forEach(selector => { $(selector).disabled = value; });
     $('#add-button').disabled = value || !canEdit();
     document.querySelectorAll('.edit, .delete').forEach(button => { button.disabled = value; });
     ['#close-dialog', '#cancel-dialog', '#cancel-delete'].forEach(selector => { $(selector).disabled = value; });
@@ -124,7 +124,7 @@
     try {
       const result = await request('list');
       state.tools = result.tools;
-      $('#session-label').textContent = result.email;
+      setAccount(result.email);
       notice('');
     } catch (error) { notice(error.message, true); }
     finally { $('#loading').hidden = true; setBusy(false); render(); }
@@ -182,11 +182,24 @@
     state.user = null;
     state.tools = [];
     await state.manager?.removeUser();
-    $('#auth-button').lastChild.textContent = 'Se connecter';
-    $('#auth-button img').src = 'assets/icons/log-in.svg';
-    $('#session-label').textContent = 'Non connecté';
-    $('#mode-badge').textContent = 'Espace personnel';
+    closeAccountMenu();
+    $('#account-menu').hidden = true;
+    $('#auth-button').hidden = false;
     render();
+  }
+
+  function closeAccountMenu(returnFocus = false) {
+    $('#account-menu-options').hidden = true;
+    $('#account-button').setAttribute('aria-expanded', 'false');
+    if (returnFocus) $('#account-button').focus();
+  }
+
+  function setAccount(email) {
+    $('#account-email').textContent = email;
+    $('#account-menu-email').textContent = email;
+    $('#account-menu').hidden = false;
+    closeAccountMenu();
+    $('#auth-button').hidden = true;
   }
 
   async function authenticate() {
@@ -205,6 +218,24 @@
   async function start() {
     $('#add-button').addEventListener('click', () => openTool());
     $('#auth-button').addEventListener('click', authenticate);
+    $('#account-button').addEventListener('click', () => {
+      const options = $('#account-menu-options');
+      options.hidden = !options.hidden;
+      $('#account-button').setAttribute('aria-expanded', String(!options.hidden));
+    });
+    $('#logout-button').addEventListener('click', async () => {
+      closeAccountMenu();
+      await clearSession();
+      notice("Session locale fermée. La session du fournisseur d'identité peut rester ouverte.");
+    });
+    document.addEventListener('click', event => {
+      if (!$('#account-menu').contains(event.target)) closeAccountMenu();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !$('#account-menu-options').hidden) {
+        closeAccountMenu(true);
+      }
+    });
     $('#refresh-button').addEventListener('click', loadTools);
     for (const selector of ['#search', '#category-filter', '#sharing-filter']) $(selector).addEventListener('input', render);
     $('#tool-form').addEventListener('submit', saveTool);
@@ -213,9 +244,7 @@
     $('#cancel-delete').addEventListener('click', () => $('#delete-dialog').close());
     for (const selector of ['#tool-dialog', '#delete-dialog']) $(selector).addEventListener('cancel', event => { if (state.busy) event.preventDefault(); });
     if (!configured) { state.tools = structuredClone(demoTools); render(); return; }
-    $('#mode-badge').textContent = 'Espace personnel';
-    $('#mode-note').textContent = 'Vos outils sont conservés dans Google Sheets.';
-    $('#session-label').textContent = 'Non connecté';
+    $('#mode-status').hidden = true;
     try {
       state.manager = new oidc.UserManager({
         authority: config.authority, client_id: config.clientId,
@@ -223,7 +252,7 @@
         response_type: 'code', scope: config.scope || 'openid email profile',
         disablePKCE: false, loadUserInfo: false, automaticSilentRenew: false,
         monitorSession: false, filterProtocolClaims: false,
-        userStore: new oidc.WebStorageStateStore({ store: new oidc.InMemoryWebStorage() }),
+        userStore: new oidc.WebStorageStateStore({ store: ToolboxAuth.createPersistentUserStorage(window.localStorage) }),
         stateStore: new oidc.WebStorageStateStore({ store: window.sessionStorage }),
         extraQueryParams: config.audience ? { audience: config.audience } : {}
       });
@@ -236,12 +265,20 @@
         }
         finally { history.replaceState(null, '', new URL(config.appUrl).pathname); }
         if (state.user?.expired) await clearSession();
+      } else {
+        const candidate = await state.manager.getUser();
+        if (candidate) {
+          try { state.user = ToolboxAuth.validateUser(candidate, config, { requireNonce: false }); }
+          catch {
+            await clearSession();
+            notice(messages.UNAUTHORIZED, true);
+          }
+        }
       }
       if (state.user) {
-        $('#auth-button').lastChild.textContent = 'Se déconnecter';
-        $('#auth-button img').src = 'assets/icons/log-out.svg';
+        setAccount(state.user.profile.email || 'Compte connecté');
         await loadTools();
-      } else notice('Connectez-vous pour retrouver votre boîte à outils.');
+      } else if ($('#notice').hidden) notice('Connectez-vous pour retrouver votre boîte à outils.');
     } catch (error) {
       await clearSession();
       const detail = String(error?.message || '').slice(0, 160);

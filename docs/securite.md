@@ -18,9 +18,13 @@ peut toujours appeler l'API. La validation des bearer tokens reste obligatoire.
 - PKCE S256 et state geres par une bibliotheque OIDC versionnee. Nonce aleatoire
   fourni par l'application et compare au profil de l'ID token, avec controles
   explicites d'issuer, d'audience, d'azp et des dates dans `public/auth.js`.
-- Aucun secret client, aucun token dans les URLs, les logs ou localStorage.
-- Access token en memoire, expiration serveur stricte, aucune confiance dans une
-  simple lecture base64 des claims. Pas de refresh token demande.
+- Aucun secret client, aucun token dans les URLs ou les logs.
+- Access token et ID token conserves dans le `localStorage` OIDC afin de reprendre
+  une session non expiree apres rechargement. Un adaptateur retire tout
+  `refresh_token` avant la persistance ; aucun scope `offline_access` n'est demande
+  et aucun renouvellement silencieux n'est effectue.
+- Expiration serveur stricte, aucune confiance dans une simple lecture base64 des
+  claims ; une session restauree est controlee avant toute operation.
 - RS256 et ES256 uniquement ; refus de `none`, des en-tetes critiques et des mauvaises
   cles ; JWKS distant fixe en configuration, sans redirection ni URL dans le JWT.
 - Audience API distincte du client pour refuser l'ID token, meme sans claim `scope`.
@@ -42,8 +46,13 @@ peut toujours appeler l'API. La validation des bearer tokens reste obligatoire.
 ## Risques residuels
 
 Pas de revocation immediate ni de protection anti-DDoS : quotas Google et surface
-publique restent des limites. Une XSS active peut lire les jetons en memoire.
-Une deconnexion locale ne revoque pas le bearer token et ne ferme pas le SSO.
+publique restent des limites. Le `localStorage` n'est pas un stockage sur : une
+XSS ou tout script malveillant execute sur l'origine peut lire l'access token et
+l'ID token persistes. Cette exposition est plus durable qu'un stockage uniquement
+en memoire ; maintenir le rendu avec `textContent`, les dependances locales et
+prevoir une CSP stricte avant ouverture. Aucun refresh token n'est stocke.
+Une deconnexion locale supprime la session OIDC du navigateur, mais ne revoque
+pas le bearer token deja emis et ne ferme pas le SSO.
 Le cache JWKS retarde le retrait d'une cle de cinq minutes maximum en situation
 normale ; un `kid` inconnu peut provoquer des requetes supplementaires au JWKS.
 Le frontal n'impose pas de CSP : en ajouter une stricte et compatible avec les
@@ -67,8 +76,10 @@ Il verifie egalement le succes avec les scopes OIDC standard ou sans claim
 
 `tests/auth.test.cjs` utilise la distribution OIDC reelle pour verifier la requete
 code, S256, le lien challenge/verifier, les scopes, state/nonce et le stockage
-temporaire, puis l'echange du code, la consommation du state et le refus d'un
-state inconnu ou d'un nonce incorrect. `tests/test_config.py` verifie la liste blanche des variables, leur
+temporaire, puis l'echange du code, la consommation du state, le rejet des
+sessions expirees et l'absence de refresh token dans le stockage persistant. Il
+verifie aussi le refus d'un state inconnu ou d'un nonce incorrect.
+`tests/test_config.py` verifie la liste blanche des variables, leur
 priorite, le refus d'URL de transport non autorisees et la limitation des scopes
 a `openid email profile`.
 

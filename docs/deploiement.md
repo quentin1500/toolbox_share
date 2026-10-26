@@ -126,7 +126,8 @@ client, meme temporairement. GitHub Pages n'offre pas de serveur pour le cacher.
 ## 5. Recette obligatoire avant ouverture
 
 - Connexion avec le vrai fournisseur : code + PKCE S256, pas de refresh token,
-  callback nettoye, aucune fuite du token dans URL ou logs.
+  callback nettoye, aucun token dans URL ou logs. Dans le stockage du navigateur,
+  verifier la presence de la session OIDC sans refresh token.
 - Depuis l'origine Pages, verifier un POST Apps Script lisible apres redirection
   vers `script.googleusercontent.com`. Ne pas essayer de corriger avec `no-cors`.
 - Avec deux comptes, creer/modifier/supprimer et verifier l'isolation des onglets.
@@ -136,8 +137,16 @@ client, meme temporairement. GitHub Pages n'offre pas de serveur pour le cacher.
 - Verifier que les seuls scopes demandes sont `openid email profile` et que
    l'access token est accepte meme sans claim `scope`, si les autres controles
    sont valides.
-- Verifier expiration, deconnexion, rechargement, refus du consentement, callback
-  sans etat local et erreurs reseau ; verifier l'absence de jetons en localStorage.
+- Verifier qu'un rechargement reprend la session avant expiration, puis que
+  l'expiration exige une nouvelle connexion et efface la session locale. Verifier
+  la deconnexion, le refus du consentement, un callback sans etat local et les
+  erreurs reseau. Le menu de compte doit montrer l'adresse complete, sans
+  troncature et avec retour a la ligne si necessaire, et ne proposer que la
+  deconnexion, y compris sur smartphone.
+- Inspecter le stockage OIDC du navigateur : aucun refresh token ne doit etre
+  conserve. Le choix `localStorage` expose les bearer tokens a tout script execute
+  sur l'origine ; proteger l'origine contre les XSS et ne jamais journaliser les
+  valeurs de stockage.
 - Appliquer [la liste de securite](securite.md) et ne pas ouvrir si les e-mails
   peuvent etre reattribues, sans decision de migration d'identite.
 
