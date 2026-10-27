@@ -39,6 +39,11 @@ peut toujours appeler l'API. La validation des bearer tokens reste obligatoire.
   suppression de l'onglet d'outils sont derives exclusivement du JWT verifie ;
   toute valeur `email` ou tout nom de feuille fourni dans le corps est ignore.
   Aucune lecture de profil n'est retournee a un autre compte.
+- Les actions d'outils (`list`, `create`, `update`, `delete`) exigent cote
+  serveur une ligne de profil existante pour l'e-mail signe. L'interface bloque
+  aussi l'inventaire jusqu'a l'enregistrement initial, y compris si les trois
+  champs restent vides. La suppression du profil retire donc aussi l'acces aux
+  outils jusqu'a la creation d'une nouvelle ligne.
 - Les champs du profil sont bornes en taille, tous optionnels et refusent les
   caracteres de controle, notamment les sauts de ligne. Les valeurs sont
   protegees contre l'interpretation comme formules Sheets. Le numero de telephone et
@@ -83,8 +88,9 @@ CRUD, tentative d'acces croise, signature d'une autre cle, expiration absente ou
 depassee, mauvais issuer/audience, e-mail absent/non verifie, `nbf` futur,
 algorithme interdit, cle inconnue, en-tete critique, validation et erreurs.
 Il verifie aussi l'isolation des profils, le refus de sauts de ligne, les champs
-vides, l'echappement des valeurs de type formule et la suppression coordonnee
-du profil et de son onglet sans effet sur un autre compte.
+vides, l'echappement des valeurs de type formule, le blocage de chaque action
+outil sans profil, et la suppression coordonnee du profil et de son onglet sans
+effet sur un autre compte.
 Il verifie egalement le succes avec les scopes OIDC standard ou sans claim
 `scope`, ainsi que le refus d'une audience client meme en l'absence de ce claim.
 
@@ -104,11 +110,16 @@ fournisseur reel. Suivre la recette du guide de deploiement, avec deux comptes.
 ## Recette visuelle et fonctionnelle locale
 
 Verifier a 1440 px et 390 px (et a 320 px minimum), sans debordement horizontal,
-images chargees, modales utilisables au clavier, focus visible et controles
+images chargees, la page profil utilisable au clavier et la modale de confirmation
+de suppression, focus visible et controles
 accessibles. Tester ajout, edition, suppression annulee/confirmee, recherche sans
 resultat, filtres combines et caracteres HTML affiches comme texte. Le mode
 demonstration doit toujours etre distingue de l'espace connecte. Avec un compte
 connecte, tester l'ouverture, l'enregistrement et l'effacement individuel des
-champs du profil, puis l'annulation et la confirmation de sa suppression.
-Confirmer avec deux comptes que la suppression ne touche que le profil et
-l'onglet d'outils du compte actif.
+champs du profil. Pour un compte sans ligne, verifier que l'inventaire est bloque,
+que l'action « Continuer » cree un profil vide et debloque l'acces, et qu'aucune
+action API d'outils ne peut contourner cette etape. Tester ensuite l'annulation
+et la confirmation de la suppression ; verifier que le compte revient a l'etape
+de creation et que ses outils ne sont pas accessibles. Confirmer avec deux
+comptes que la suppression ne touche que le profil et l'onglet d'outils du compte
+actif.

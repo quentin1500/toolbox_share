@@ -7,7 +7,7 @@
   const categories = { Percage: 'drill', Decoupe: 'axe', Jardin: 'shovel', Mesure: 'ruler', 'A main': 'hammer', Autre: 'wrench' };
   const categoryLabels = { Percage: 'Perçage', Decoupe: 'Découpe', Jardin: 'Jardin', Mesure: 'Mesure', 'A main': 'À main', Autre: 'Autre' };
   const conditionLabels = { 'Tres bon': 'Très bon', Bon: 'Bon', Usage: 'Usagé' };
-  const state = { tools: [], profile: { name: '', phone: '', address: '' }, user: null, manager: null, busy: false, editing: null, deleting: null };
+  const state = { tools: [], profile: { exists: false, name: '', phone: '', address: '' }, profileRequired: false, page: 'tools', pendingRequests: 0, user: null, manager: null, busy: false, editing: null, deleting: null };
   const demoTools = [
     { id: 'demo-1', name: 'Perceuse sans fil', category: 'Percage', description: 'Bosch 18 V · 2 batteries et coffret de forets', condition: 'Tres bon', shared: true },
     { id: 'demo-2', name: 'Scie sauteuse', category: 'Decoupe', description: 'Makita · Lames bois et métal incluses', condition: 'Bon', shared: true },
@@ -19,6 +19,7 @@
   const messages = {
     UNAUTHORIZED: 'Votre session a expiré ou le jeton est invalide. Reconnectez-vous.',
     FORBIDDEN: "Le jeton ne contient pas les droits ou l'e-mail vérifié attendus. Contactez l'administrateur.",
+    PROFILE_REQUIRED: 'Créez votre profil pour accéder aux outils.',
     NOT_FOUND: "Cet outil n'existe plus. Actualisez votre inventaire.",
     BAD_REQUEST: 'Les informations saisies ne sont pas valides.',
     BUSY: 'Le service est occupé. Réessayez dans quelques instants.',
@@ -32,15 +33,55 @@
     $('#notice').hidden = !message;
   }
 
-  function canEdit() { return !configured || Boolean(state.user && !state.user.expired); }
+  function loadingMessage(action) {
+    return {
+      list: 'Chargement de votre boîte à outils…',
+      getProfile: 'Chargement de votre profil…',
+      saveProfile: 'Enregistrement de votre profil…',
+      deleteProfile: 'Suppression de votre profil et de vos outils…'
+    }[action] || 'Mise à jour de votre boîte à outils…';
+  }
+
+  function beginRequest(action) {
+    state.pendingRequests += 1;
+    $('#backend-loading-text').textContent = loadingMessage(action);
+    $('#backend-loading').hidden = false;
+    $('#outils').setAttribute('aria-busy', 'true');
+  }
+
+  function endRequest() {
+    state.pendingRequests = Math.max(0, state.pendingRequests - 1);
+    const pending = state.pendingRequests > 0;
+    $('#backend-loading').hidden = !pending;
+    $('#outils').setAttribute('aria-busy', String(pending));
+  }
+
+  function canEdit() { return !configured || Boolean(state.user && !state.user.expired && state.profile.exists); }
+
+  function markProfileRequired() {
+    state.profile = { exists: false, name: '', phone: '', address: '' };
+    state.tools = [];
+    state.profileRequired = true;
+  }
+
+  function setPage(page) {
+    state.page = page;
+    $('#tools-page').hidden = page !== 'tools';
+    $('#profile-page').hidden = page !== 'profile';
+    const inventoryLink = document.querySelector('.nav-item');
+    inventoryLink.classList.toggle('active', page === 'tools');
+    if (page === 'tools') inventoryLink.setAttribute('aria-current', 'page');
+    else inventoryLink.removeAttribute('aria-current');
+    if (page === 'profile') $('#profile-title').focus();
+  }
 
   function setBusy(value) {
     state.busy = value;
     $('#tool-grid').setAttribute('aria-busy', String(value));
-    ['#save-button', '#confirm-delete', '#refresh-button', '#auth-button', '#account-button', '#profile-button', '#delete-profile-button', '#logout-button', '#save-profile-button', '#confirm-profile-delete'].forEach(selector => { $(selector).disabled = value; });
+    ['#save-button', '#confirm-delete', '#refresh-button', '#auth-button', '#account-button', '#profile-button', '#delete-profile-button', '#logout-button', '#logout-onboarding-button', '#save-profile-button', '#confirm-profile-delete', '#profile-back-button', '#cancel-profile-button'].forEach(selector => { $(selector).disabled = value; });
     $('#add-button').disabled = value || !canEdit();
     document.querySelectorAll('.edit, .delete').forEach(button => { button.disabled = value; });
-    ['#close-dialog', '#cancel-dialog', '#cancel-delete', '#close-profile-dialog', '#cancel-profile-dialog', '#cancel-profile-delete'].forEach(selector => { $(selector).disabled = value; });
+    ['#close-dialog', '#cancel-dialog', '#cancel-delete', '#cancel-profile-delete'].forEach(selector => { $(selector).disabled = value; });
   }
 
   function render() {
@@ -92,6 +133,7 @@
     if (!state.user || state.user.expired) throw new Error(messages.UNAUTHORIZED);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30000);
+    beginRequest(action);
     try {
       const response = await fetch(config.apiUrl, {
         method: 'POST', mode: 'cors', credentials: 'omit', redirect: 'follow',
@@ -103,6 +145,7 @@
       const result = await response.json();
       if (!result.ok) {
         if (result.error === 'UNAUTHORIZED') await clearSession();
+        if (result.error === 'PROFILE_REQUIRED') markProfileRequired();
         throw new Error(messages[result.error] || messages.INTERNAL);
       }
       return result.data;
@@ -114,23 +157,28 @@
       throw new Error("Confirmation impossible. L'action a peut-être abouti : actualisez avant de réessayer.");
     } finally {
       clearTimeout(timer);
+      endRequest();
     }
   }
 
   async function loadTools() {
     if (state.busy) return;
     if (!configured) { render(); return; }
-    if (!state.user) return;
+    if (!state.user || !state.profile.exists) return;
     setBusy(true);
-    $('#loading').hidden = false;
     $('#empty-state').hidden = true;
     try {
       const result = await request('list');
       state.tools = result.tools;
       setAccount(result.email);
       notice('');
-    } catch (error) { notice(error.message, true); }
-    finally { $('#loading').hidden = true; setBusy(false); render(); }
+    } catch (error) {
+      if (error.message === messages.PROFILE_REQUIRED) {
+        showProfile(state.profile);
+        notice(messages.PROFILE_REQUIRED, true);
+      } else notice(error.message, true);
+    }
+    finally { setBusy(false); render(); }
   }
 
   function openTool(tool = null) {
@@ -163,7 +211,15 @@
       else state.tools.unshift(saved);
       $('#tool-dialog').close();
       notice(editing ? 'Outil mis à jour.' : 'Votre outil a rejoint la boîte.');
-    } catch (error) { $('#form-error').textContent = error.message; $('#form-error').hidden = false; }
+    } catch (error) {
+      if (error.message === messages.PROFILE_REQUIRED) {
+        $('#tool-dialog').close();
+        showProfile(state.profile);
+      } else {
+        $('#form-error').textContent = error.message;
+        $('#form-error').hidden = false;
+      }
+    }
     finally { setBusy(false); render(); }
   }
 
@@ -177,24 +233,48 @@
       state.tools = state.tools.filter(tool => tool.id !== id);
       $('#delete-dialog').close();
       notice('Outil supprimé.');
-    } catch (error) { $('#delete-error').textContent = error.message; $('#delete-error').hidden = false; }
+    } catch (error) {
+      if (error.message === messages.PROFILE_REQUIRED) {
+        $('#delete-dialog').close();
+        showProfile(state.profile);
+      } else {
+        $('#delete-error').textContent = error.message;
+        $('#delete-error').hidden = false;
+      }
+    }
     finally { setBusy(false); render(); }
   }
 
   async function openProfile() {
     if (state.busy || !state.user) return;
     closeAccountMenu();
+    showProfile(state.profile);
     setBusy(true);
     $('#profile-error').hidden = true;
     try {
-      state.profile = await request('getProfile');
-      const form = $('#profile-form');
-      for (const key of ['name', 'phone', 'address']) form.elements.namedItem(key).value = state.profile[key];
-      $('#profile-dialog').showModal();
-      form.elements.namedItem('name').focus();
+      showProfile(await request('getProfile'));
     } catch (error) {
       notice(error.message, true);
     } finally { setBusy(false); }
+  }
+
+  function showProfile(profile) {
+    state.profile = profile;
+    state.profileRequired = !profile.exists;
+    const form = $('#profile-form');
+    for (const key of ['name', 'phone', 'address']) form.elements.namedItem(key).value = profile[key];
+    $('#profile-title').textContent = state.profileRequired ? 'Créer votre profil' : 'Mon profil';
+    $('#profile-help').textContent = state.profileRequired
+      ? 'Complétez les champs si vous le souhaitez, ou continuez sans rien renseigner.'
+      : 'Ces informations restent privées et peuvent être effacées à tout moment.';
+    $('#profile-back-button').hidden = state.profileRequired;
+    $('#cancel-profile-button').hidden = state.profileRequired;
+    $('#logout-onboarding-button').hidden = !state.profileRequired;
+    $('#save-profile-button').textContent = state.profileRequired ? 'Continuer' : 'Enregistrer';
+    $('#delete-profile-button').hidden = state.profileRequired;
+    setPage('profile');
+    if (state.profileRequired) $('#save-profile-button').focus();
+    else form.elements.namedItem('name').focus();
   }
 
   async function saveProfile(event) {
@@ -202,16 +282,21 @@
     if (state.busy) return;
     const data = new FormData(event.target);
     const profile = Object.fromEntries(['name', 'phone', 'address'].map(key => [key, String(data.get(key) || '').trim()]));
+    const onboarding = state.profileRequired;
     setBusy(true);
     $('#profile-error').hidden = true;
     try {
       state.profile = await request('saveProfile', { profile });
-      $('#profile-dialog').close();
-      notice('Profil enregistré.');
+      state.profileRequired = false;
+      if (onboarding) {
+        notice('Profil créé. Bienvenue !');
+        setPage('tools');
+      } else notice('Profil enregistré.');
     } catch (error) {
       $('#profile-error').textContent = error.message;
       $('#profile-error').hidden = false;
     } finally { setBusy(false); }
+    if (onboarding && state.profile.exists) await loadTools();
   }
 
   async function deleteProfile(event) {
@@ -221,10 +306,11 @@
     $('#profile-delete-error').hidden = true;
     try {
       await request('deleteProfile');
-      state.profile = { name: '', phone: '', address: '' };
+      state.profile = { exists: false, name: '', phone: '', address: '' };
       state.tools = [];
       $('#profile-delete-dialog').close();
-      notice('Votre profil et votre boîte à outils ont été supprimés.');
+      notice('Votre profil et votre boîte à outils ont été supprimés. Créez un nouveau profil pour continuer.');
+      showProfile(state.profile);
     } catch (error) {
       $('#profile-delete-error').textContent = error.message;
       $('#profile-delete-error').hidden = false;
@@ -234,7 +320,12 @@
   async function clearSession() {
     state.user = null;
     state.tools = [];
-    state.profile = { name: '', phone: '', address: '' };
+    state.profile = { exists: false, name: '', phone: '', address: '' };
+    state.profileRequired = false;
+    ['#tool-dialog', '#delete-dialog', '#profile-delete-dialog'].forEach(selector => {
+      if ($(selector).open) $(selector).close();
+    });
+    setPage('tools');
     await state.manager?.removeUser();
     closeAccountMenu();
     $('#account-menu').hidden = true;
@@ -279,7 +370,6 @@
     });
     $('#profile-button').addEventListener('click', openProfile);
     $('#delete-profile-button').addEventListener('click', () => {
-      closeAccountMenu();
       $('#profile-delete-error').hidden = true;
       $('#profile-delete-dialog').showModal();
       $('#cancel-profile-delete').focus();
@@ -303,11 +393,26 @@
     $('#delete-form').addEventListener('submit', deleteTool);
     $('#profile-form').addEventListener('submit', saveProfile);
     $('#profile-delete-form').addEventListener('submit', deleteProfile);
+    $('#logout-onboarding-button').addEventListener('click', async () => {
+      await clearSession();
+      notice('Session locale fermée. La session du fournisseur d’identité peut rester ouverte.');
+    });
+    $('#profile-back-button').addEventListener('click', () => {
+      if (!state.profileRequired) setPage('tools');
+    });
+    document.querySelector('.nav-item').addEventListener('click', event => {
+      if (state.profileRequired) event.preventDefault();
+      else setPage('tools');
+    });
+    $('#cancel-profile-button').addEventListener('click', () => {
+      if (!state.profileRequired) setPage('tools');
+    });
     for (const selector of ['#close-dialog', '#cancel-dialog']) $(selector).addEventListener('click', () => $('#tool-dialog').close());
     $('#cancel-delete').addEventListener('click', () => $('#delete-dialog').close());
-    for (const selector of ['#close-profile-dialog', '#cancel-profile-dialog']) $(selector).addEventListener('click', () => $('#profile-dialog').close());
     $('#cancel-profile-delete').addEventListener('click', () => $('#profile-delete-dialog').close());
-    for (const selector of ['#tool-dialog', '#delete-dialog', '#profile-dialog', '#profile-delete-dialog']) $(selector).addEventListener('cancel', event => { if (state.busy) event.preventDefault(); });
+    for (const selector of ['#tool-dialog', '#delete-dialog', '#profile-delete-dialog']) {
+      $(selector).addEventListener('cancel', event => { if (state.busy) event.preventDefault(); });
+    }
     if (!configured) { state.tools = structuredClone(demoTools); render(); return; }
     $('#mode-status').hidden = true;
     try {
@@ -342,7 +447,16 @@
       }
       if (state.user) {
         setAccount(state.user.profile.email || 'Compte connecté');
-        await loadTools();
+        try {
+          const profile = await request('getProfile');
+          if (profile.exists) {
+            state.profile = profile;
+            await loadTools();
+          } else {
+            showProfile(profile);
+            notice('Créez votre profil pour accéder à votre boîte à outils.');
+          }
+        } catch (error) { notice(error.message, true); }
       } else if ($('#notice').hidden) notice('Connectez-vous pour retrouver votre boîte à outils.');
     } catch (error) {
       await clearSession();

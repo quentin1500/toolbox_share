@@ -26,7 +26,6 @@
         <div id="account-menu-options" class="account-menu-options" role="menu" hidden>
           <p id="account-menu-email" class="account-menu-email"></p>
           <button id="profile-button" type="button" role="menuitem"><img src="assets/icons/users.svg" alt="">Mon profil</button>
-          <button id="delete-profile-button" class="menu-danger" type="button" role="menuitem"><img src="assets/icons/trash-2.svg" alt="">Supprimer mon profil</button>
           <button id="logout-button" type="button" role="menuitem"><img src="assets/icons/log-out.svg" alt="">Se déconnecter</button>
         </div>
       </div>
@@ -41,33 +40,61 @@
       <div class="sidebar-bottom"><span class="small-dot"></span>Moins acheter, plus partager.</div>
     </aside>
     <main id="outils">
-      <section class="page-heading">
-        <div><h1>Ma boîte à outils<span>.</span></h1></div>
-        <button id="add-button" class="button primary" type="button"><img src="assets/icons/plus.svg" alt="">Ajouter un outil</button>
-      </section>
-      <section class="workshop-banner" aria-label="L'esprit Toolbox Share">
-        <img src="assets/workshop.jpg" alt="Marteau à manche orange et tête en acier" width="1280" height="580">
-        <div><span class="banner-kicker">CAP SUR LE PARTAGE</span><h2>À l'abordage des petits travaux !</h2></div>
-        <span class="banner-tag">RÉPARER &nbsp; CRÉER &nbsp; TRANSMETTRE</span>
-      </section>
-      <section class="inventory-summary" aria-label="Résumé de votre inventaire">
-        <div><strong id="total-count">0</strong><span>outils dans ma boîte</span></div>
-        <div><strong id="shared-count">0</strong><span>avec partage prévu</span></div>
-        <div id="mode-status" class="session-status"><span id="mode-badge" class="badge">Démonstration</span></div>
-      </section>
       <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
-      <section class="inventory" aria-labelledby="inventory-title">
-        <div class="inventory-title"><h2 id="inventory-title">Mon inventaire <span id="visible-count">0</span></h2><button id="refresh-button" class="icon-button" title="Actualiser les outils" aria-label="Actualiser les outils"><img src="assets/icons/refresh-cw.svg" alt=""></button></div>
-        <div class="filters">
-          <label class="search"><img src="assets/icons/search.svg" alt=""><input id="search" type="search" placeholder="Rechercher un outil…" aria-label="Rechercher un outil" maxlength="100"></label>
-          <label class="select-filter"><span class="sr-only">Catégorie</span><select id="category-filter"><option value="">Toutes les catégories</option><option value="Percage">Perçage</option><option value="Decoupe">Découpe</option><option value="Jardin">Jardin</option><option value="Mesure">Mesure</option><option value="A main">À main</option><option value="Autre">Autre</option></select></label>
-          <label class="select-filter"><span class="sr-only">Partage</span><select id="sharing-filter"><option value="">Tous les outils</option><option value="shared">Partage prévu</option><option value="private">Privés</option></select></label>
+      <div id="backend-loading" class="backend-loading" role="status" aria-live="polite" aria-atomic="true" hidden>
+        <span class="loading-spinner" aria-hidden="true"></span>
+        <span id="backend-loading-text">Chargement…</span>
+      </div>
+      <div id="tools-page">
+        <section class="page-heading">
+          <div><h1>Ma boîte à outils<span>.</span></h1></div>
+          <button id="add-button" class="button primary" type="button"><img src="assets/icons/plus.svg" alt="">Ajouter un outil</button>
+        </section>
+        <section class="workshop-banner" aria-label="L'esprit Toolbox Share">
+          <img src="assets/workshop.jpg" alt="Marteau à manche orange et tête en acier" width="1280" height="580">
+          <div><span class="banner-kicker">CAP SUR LE PARTAGE</span><h2>À l'abordage des petits travaux !</h2></div>
+          <span class="banner-tag">RÉPARER &nbsp; CRÉER &nbsp; TRANSMETTRE</span>
+        </section>
+        <section class="inventory-summary" aria-label="Résumé de votre inventaire">
+          <div><strong id="total-count">0</strong><span>outils dans ma boîte</span></div>
+          <div><strong id="shared-count">0</strong><span>avec partage prévu</span></div>
+          <div id="mode-status" class="session-status"><span id="mode-badge" class="badge">Démonstration</span></div>
+        </section>
+        <section class="inventory" aria-labelledby="inventory-title">
+          <div class="inventory-title"><h2 id="inventory-title">Mon inventaire <span id="visible-count">0</span></h2><button id="refresh-button" class="icon-button" title="Actualiser les outils" aria-label="Actualiser les outils"><img src="assets/icons/refresh-cw.svg" alt=""></button></div>
+          <div class="filters">
+            <label class="search"><img src="assets/icons/search.svg" alt=""><input id="search" type="search" placeholder="Rechercher un outil…" aria-label="Rechercher un outil" maxlength="100"></label>
+            <label class="select-filter"><span class="sr-only">Catégorie</span><select id="category-filter"><option value="">Toutes les catégories</option><option value="Percage">Perçage</option><option value="Decoupe">Découpe</option><option value="Jardin">Jardin</option><option value="Mesure">Mesure</option><option value="A main">À main</option><option value="Autre">Autre</option></select></label>
+            <label class="select-filter"><span class="sr-only">Partage</span><select id="sharing-filter"><option value="">Tous les outils</option><option value="shared">Partage prévu</option><option value="private">Privés</option></select></label>
+          </div>
+          <div id="tool-grid" class="tool-grid" aria-busy="false"></div>
+          <div id="empty-state" class="empty-state" hidden><img src="assets/icons/wrench.svg" alt="" width="36" height="36"><h3 id="empty-title">Votre boîte attend son premier outil.</h3><p id="empty-description">Ajoutez le matériel que vous avez sous la main.</p></div>
+        </section>
+        <footer>Un outil qui sert, c'est une bonne idée qui avance.<span>Toolbox Share · Première édition</span></footer>
+      </div>
+      <section id="profile-page" class="profile-page" aria-labelledby="profile-title" hidden>
+        <div class="page-heading">
+          <div><p class="eyebrow">VOTRE COMPTE</p><h1 id="profile-title" tabindex="-1">Mon profil<span>.</span></h1></div>
+          <button id="profile-back-button" class="button secondary" type="button">Retour à ma boîte</button>
         </div>
-        <p id="loading" class="empty-state" hidden>Chargement de votre boîte à outils…</p>
-        <div id="tool-grid" class="tool-grid" aria-busy="false"></div>
-        <div id="empty-state" class="empty-state" hidden><img src="assets/icons/wrench.svg" alt="" width="36" height="36"><h3 id="empty-title">Votre boîte attend son premier outil.</h3><p id="empty-description">Ajoutez le matériel que vous avez sous la main.</p></div>
+        <div class="profile-card">
+          <p id="profile-help" class="profile-help">Ces informations restent privées et peuvent être effacées à tout moment.</p>
+          <form id="profile-form">
+            <label>Nom et prénom<input name="name" autocomplete="name" maxlength="120"></label>
+            <label>Numéro de téléphone<input name="phone" type="tel" autocomplete="tel" maxlength="50"></label>
+            <label>Adresse physique<input name="address" autocomplete="street-address" maxlength="500"></label>
+            <p id="profile-error" class="form-error" role="alert" hidden></p>
+            <div class="profile-actions">
+              <button id="delete-profile-button" class="button danger" type="button"><img src="assets/icons/trash-2.svg" alt="">Supprimer mon profil</button>
+              <div class="profile-actions-right">
+                <button type="button" id="logout-onboarding-button" class="button secondary" hidden>Se déconnecter</button>
+                <button type="button" id="cancel-profile-button" class="button secondary">Annuler</button>
+                <button type="submit" id="save-profile-button" class="button primary">Enregistrer</button>
+              </div>
+            </div>
+          </form>
+        </div>
       </section>
-      <footer>Un outil qui sert, c'est une bonne idée qui avance.<span>Toolbox Share · Première édition</span></footer>
     </main>
   </div>
   <template id="tool-template">
@@ -88,17 +115,6 @@
     </form>
   </dialog>
   <dialog id="delete-dialog" aria-labelledby="delete-title"><form id="delete-form"><h2 id="delete-title">Supprimer cet outil ?</h2><p id="delete-description"></p><p>Cette action est définitive.</p><p id="delete-error" class="form-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" id="cancel-delete" class="button secondary">Conserver</button><button id="confirm-delete" type="submit" class="button danger">Supprimer</button></div></form></dialog>
-  <dialog id="profile-dialog" aria-labelledby="profile-title">
-    <form id="profile-form">
-      <div class="dialog-heading"><div><p class="eyebrow">VOTRE COMPTE</p><h2 id="profile-title">Mon profil</h2></div><button class="icon-button" type="button" id="close-profile-dialog" aria-label="Fermer"><img src="assets/icons/x.svg" alt=""></button></div>
-      <p class="profile-help">Ces informations restent privées et peuvent être effacées à tout moment.</p>
-      <label>Nom et prénom<input name="name" autocomplete="name" maxlength="120"></label>
-      <label>Numéro de téléphone<input name="phone" type="tel" autocomplete="tel" maxlength="50"></label>
-      <label>Adresse physique<input name="address" autocomplete="street-address" maxlength="500"></label>
-      <p id="profile-error" class="form-error" role="alert" hidden></p>
-      <div class="dialog-actions"><button type="button" id="cancel-profile-dialog" class="button secondary">Annuler</button><button type="submit" id="save-profile-button" class="button primary">Enregistrer</button></div>
-    </form>
-  </dialog>
   <dialog id="profile-delete-dialog" aria-labelledby="profile-delete-title">
     <form id="profile-delete-form">
       <h2 id="profile-delete-title">Supprimer votre profil ?</h2>

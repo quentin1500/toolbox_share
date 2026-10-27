@@ -6,7 +6,7 @@ function doPost(event) {
     }
     result = { ok: true, data: dispatch_(JSON.parse(event.postData.contents)) };
   } catch (error) {
-    var allowed = ['BAD_REQUEST', 'UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND', 'BUSY', 'CONFIGURATION'];
+    var allowed = ['BAD_REQUEST', 'UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND', 'BUSY', 'CONFIGURATION', 'PROFILE_REQUIRED'];
     var code = allowed.indexOf(error.message) >= 0 ? error.message : 'INTERNAL';
     result = { ok: false, error: code };
   }
@@ -94,18 +94,21 @@ function dispatch_(request) {
   var config = configuration_();
   var identity = verifyJwt_(request.accessToken, config);
   var actions = ['list', 'create', 'update', 'delete', 'getProfile', 'saveProfile', 'deleteProfile'];
+  var profiles;
   if (actions.indexOf(request.action) < 0) throw new Error('BAD_REQUEST');
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) throw new Error('BUSY');
   try {
     var book = SpreadsheetApp.openById(config.SPREADSHEET_ID);
     if (['getProfile', 'saveProfile', 'deleteProfile'].indexOf(request.action) >= 0) {
-      var profiles = profileSheet_(book);
+      profiles = profileSheet_(book);
       if (request.action === 'getProfile') return getProfile_(profiles, identity.email);
       if (request.action === 'saveProfile') return saveProfile_(profiles, identity.email, request.profile);
       deleteProfile_(book, profiles, identity.email);
       return { deleted: true };
     }
+    profiles = profileSheet_(book);
+    if (!profileRow_(profiles, identity.email)) throw new Error('PROFILE_REQUIRED');
     var sheetName = userSheetName_(identity.email);
     var sheet = book.getSheetByName(sheetName);
     if (!sheet && request.action === 'list') return { email: identity.email, tools: [] };
@@ -171,9 +174,10 @@ function profileRow_(sheet, email) {
 
 function getProfile_(sheet, email) {
   var row = profileRow_(sheet, email);
-  if (!row) return { name: '', phone: '', address: '' };
+  if (!row) return { exists: false, name: '', phone: '', address: '' };
   var values = sheet.getRange(row, 2, 1, 3).getValues()[0];
   return {
+    exists: true,
     name: profileValue_(values[0]),
     phone: profileValue_(values[1]),
     address: profileValue_(values[2])
@@ -186,6 +190,7 @@ function saveProfile_(sheet, email, input) {
   var values = [email, profile.name, profile.phone, profile.address].map(sheetText_);
   if (row) sheet.getRange(row, 1, 1, 4).setValues([values]);
   else sheet.appendRow(values);
+  profile.exists = true;
   return profile;
 }
 

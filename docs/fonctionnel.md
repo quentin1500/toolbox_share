@@ -42,16 +42,23 @@ filtres, formulaires et demonstrations suivent cette correspondance.
 
 Apres connexion, l'adresse du compte est affichee de maniere concise dans un
 bouton visible egalement sur smartphone. Ce bouton ouvre un menu de compte avec
-les actions « Mon profil », « Supprimer mon profil » et la deconnexion. En haut
-du menu, l'adresse complete est affichee sans troncature ; elle revient a la
-ligne sur les petits ecrans.
+les actions « Mon profil » et la deconnexion. En haut du menu, l'adresse complete
+est affichee sans troncature ; elle revient a la ligne sur les petits ecrans.
+« Mon profil » ouvre une page integree a l'ecran principal, pas une modale. La
+suppression du profil se trouve sur cette page, aupres des informations de
+compte, et reste protegee par une confirmation. Lors d'un echange avec le
+backend, la page reste affichee avec un indicateur anime et un texte d'etat
+adapte a l'action ; l'indicateur disparait lorsque la reponse est recue.
 L'adresse du profil OIDC est presentee des le retour de connexion, puis confirmee
 par la reponse du backend ; aucune
 adresse saisie ni information de profil du navigateur n'autorise une operation.
 Un rechargement reprend la session
 OIDC persistante tant que l'access token et l'ID token sont valides. A expiration,
 la session locale est effacee et une nouvelle connexion est requise. Les outils
-reels restent dans Sheets.
+reels restent dans Sheets. A chaque connexion, l'application verifie le profil
+dans Sheets avant de charger l'inventaire. Si la ligne est absente, l'utilisateur
+doit creer son profil pour continuer, mais peut enregistrer les trois champs
+vides ; aucun autre ecran fonctionnel n'est accessible avant cette creation.
 
 Sans configuration, une demonstration isolee fonctionne uniquement en memoire,
 sans requete API, sans compte et sans sauvegarde navigateur. Les six exemples
@@ -93,12 +100,26 @@ sequenceDiagram
   I-->>F: access_token et id_token
   F->>F: Callback OIDC puis controle local nonce, issuer, audience et dates
   F->>F: Jetons OIDC persistes dans localStorage (sans refresh token), URL nettoyee
-  F->>A: POST list + access_token
+  F->>A: POST getProfile + access_token
+  A->>A: Verifier le JWT a chaque requete
   A->>I: JWKS si absent du cache ou kid inconnu
-  A->>A: Signature RS256/ES256, issuer, audience, expiration, email verifie
-  A->>G: Lire seulement l'onglet derive de cet email
-  G-->>A: Outils personnels
-  A-->>F: JSON ok + email + tools
+  A->>G: Chercher la ligne Profils de cet email
+  alt Profil present
+    A-->>F: exists=true et champs du profil
+    F->>A: POST list + access_token
+    A->>G: Lire l'onglet derive de cet email
+    G-->>A: Outils personnels
+    A-->>F: Inventaire
+  else Profil absent
+    A-->>F: exists=false
+    F-->>U: Formulaire requis, champs tous facultatifs
+    U->>F: Continuer, meme avec les champs vides
+    F->>A: POST saveProfile + access_token
+    A->>A: Reverifier le JWT
+    A->>G: Creer la ligne Profils pour l'email du JWT
+    A-->>F: Profil cree
+    F->>A: POST list + access_token
+  end
   F-->>U: Inventaire personnel
 ```
 
@@ -149,12 +170,19 @@ actualiser avant de reessayer, afin d'eviter une creation en double.
 
 ## Profil personnel
 
-Le menu du compte permet de consulter et modifier les champs nom et prenom,
+La page « Mon profil », ouverte depuis le menu du compte, permet de consulter et
+modifier les champs nom et prenom,
 numero de telephone et adresse physique. Chaque champ est facultatif et peut
 etre vide individuellement ; une sauvegarde avec les trois champs vides conserve
 une ligne identifiee par l'e-mail dans `Profils`. La feuille comporte les colonnes
 `email`, `nom prénom`, `numéro de téléphone` et `adresse physique`. Elle est
 privee, ne sert pas au catalogue et n'est jamais exposee aux autres utilisateurs.
+
+Lorsqu'aucune ligne de profil n'existe a la connexion, un formulaire bloque
+l'acces a l'inventaire. Le bouton « Continuer » cree le compte applicatif meme
+si l'utilisateur n'a rien renseigne. Cette regle s'applique egalement aux
+utilisateurs qui possedent deja un onglet d'outils mais n'ont pas encore de
+ligne dans `Profils`.
 
 Le navigateur n'envoie pas d'e-mail ni de numero de ligne pour autoriser ces
 operations. Apps Script derive l'e-mail de l'access token verifie, puis lit ou
@@ -166,9 +194,11 @@ interpretees comme formules Sheets sont protegees comme texte.
 « Supprimer mon profil » ouvre une confirmation qui precise que l'action efface
 la ligne de profil et l'onglet contenant tous les outils de l'utilisateur.
 L'action est irreversible depuis l'application. Le jeton OIDC et le compte chez
-le fournisseur ne sont pas supprimes ; un utilisateur toujours connecte peut
-creer de nouvelles donnees. La liste vide ne recree pas l'onglet d'outils ; celui-ci
-est recree seulement lors d'un nouvel ajout d'outil.
+le fournisseur ne sont pas supprimes ; un utilisateur toujours connecte revient
+au formulaire de creation de profil. Il ne peut ni lister ni recreer ses outils
+avant d'avoir cree un nouveau profil. La liste vide ne recree pas l'onglet
+d'outils ; celui-ci est recree seulement lors d'un nouvel ajout apres creation
+du profil.
 
 ```mermaid
 sequenceDiagram
@@ -200,9 +230,12 @@ corps JSON. `accessToken` est present a chaque appel. Aucun en-tete Authorizatio
 | `create` | `tool` | Outil complet avec UUID et dates |
 | `update` | `id`, `tool` | Outil complet mis a jour |
 | `delete` | `id` | `{id}` |
-| `getProfile` | Aucun | `{name, phone, address}` pour l'e-mail du JWT |
+| `getProfile` | Aucun | `{exists, name, phone, address}` pour l'e-mail du JWT |
 | `saveProfile` | `profile: {name, phone, address}` | Profil sauvegarde |
 | `deleteProfile` | Aucun | `{deleted: true}` apres suppression de la ligne de profil et de l'onglet d'outils correspondant |
+
+Les actions `list`, `create`, `update` et `delete` repondent
+`PROFILE_REQUIRED` si la ligne de profil de l'e-mail signe n'existe pas.
 
 Exemple de `tool` :
 
@@ -212,8 +245,9 @@ Exemple de `tool` :
 
 Enveloppe : `{"ok":true,"data":...}` ou `{"ok":false,"error":"UNAUTHORIZED"}`.
 Erreurs : `BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `BUSY`,
-`CONFIGURATION`, `INTERNAL`. Le serveur ne renvoie ni stack, ni JWT, ni detail
-cryptographique. Les erreurs HTTP et les erreurs applicatives sont distinctes.
+`CONFIGURATION`, `PROFILE_REQUIRED`, `INTERNAL`. Le serveur ne renvoie ni stack,
+ni JWT, ni detail cryptographique. Les erreurs HTTP et les erreurs applicatives
+sont distinctes.
 
 ## Etapes suivantes (non implementees)
 

@@ -93,11 +93,13 @@ const tool = { name: 'Perceuse', category: 'Percage', description: '18 V', condi
 test('signed access token accepted; full CRUD isolated by verified email', () => {
   const api = runtime();
   const accessToken = token();
+  api.dispatch_({ action: 'saveProfile', accessToken, profile: {} });
   const created = api.dispatch_({ action: 'create', accessToken, tool });
   assert.equal(api.dispatch_({ action: 'list', accessToken }).tools.length, 1);
   const updated = api.dispatch_({ action: 'update', accessToken, id: created.id, tool: { ...tool, name: 'Scie' } });
   assert.equal(updated.name, 'Scie');
   const bob = token({ email: 'bob@example.com', sub: 'bob' });
+  api.dispatch_({ action: 'saveProfile', accessToken: bob, profile: {} });
   assert.equal(api.dispatch_({ action: 'list', accessToken: bob, email: 'alice@example.com' }).tools.length, 0);
   assert.throws(() => api.dispatch_({ action: 'delete', accessToken: bob, id: created.id }), /NOT_FOUND/);
   api.dispatch_({ action: 'delete', accessToken, id: created.id });
@@ -109,6 +111,7 @@ test('profiles are derived from the verified email and isolated from other users
   const aliceToken = token();
   const bobToken = token({ email: 'bob@example.com', sub: 'bob' });
   const empty = api.dispatch_({ action: 'getProfile', accessToken: aliceToken });
+  assert.equal(empty.exists, false);
   assert.equal(empty.name, '');
   assert.equal(empty.phone, '');
   assert.equal(empty.address, '');
@@ -121,6 +124,7 @@ test('profiles are derived from the verified email and isolated from other users
   const bobProfile = { name: 'Bob Exemple', phone: '', address: '2 place du Marteau' };
   api.dispatch_({ action: 'saveProfile', accessToken: bobToken, profile: bobProfile });
   assert.equal(api.dispatch_({ action: 'getProfile', accessToken: aliceToken }).name, aliceProfile.name);
+  assert.equal(api.dispatch_({ action: 'getProfile', accessToken: aliceToken }).exists, true);
   assert.equal(api.dispatch_({ action: 'getProfile', accessToken: bobToken }).name, bobProfile.name);
   assert.equal(api.__sheets.get('Profils').getRange(1, 1, 3, 4).getValues()[0][0], 'email');
 
@@ -143,9 +147,29 @@ test('profiles are derived from the verified email and isolated from other users
   assert.equal(api.__sheets.has(api.userSheetName_('alice@example.com')), false);
   assert.equal(api.__sheets.has(api.userSheetName_('bob@example.com')), true);
   assert.equal(api.dispatch_({ action: 'getProfile', accessToken: bobToken }).name, bobProfile.name);
-  assert.equal(api.dispatch_({ action: 'list', accessToken: aliceToken }).tools.length, 0);
+  assert.throws(() => api.dispatch_({ action: 'list', accessToken: aliceToken }), /PROFILE_REQUIRED/);
   assert.equal(api.__sheets.has(api.userSheetName_('alice@example.com')), false);
+  api.dispatch_({ action: 'saveProfile', accessToken: aliceToken, profile: {} });
+  assert.equal(api.dispatch_({ action: 'list', accessToken: aliceToken }).tools.length, 0);
   assert.ok(aliceTool.id);
+});
+
+test('tool APIs require an existing profile, then allow a profile with blank fields', () => {
+  const api = runtime();
+  const accessToken = token();
+  assert.equal(api.dispatch_({ action: 'getProfile', accessToken }).exists, false);
+  for (const request of [
+    { action: 'list' },
+    { action: 'create', tool },
+    { action: 'update', id: 'tool-id', tool },
+    { action: 'delete', id: 'tool-id' }
+  ]) {
+    assert.throws(() => api.dispatch_({ ...request, accessToken }), /PROFILE_REQUIRED/);
+  }
+  api.dispatch_({ action: 'saveProfile', accessToken, profile: {} });
+  assert.equal(api.dispatch_({ action: 'getProfile', accessToken }).exists, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(api.dispatch_({ action: 'list', accessToken }).tools)), []);
+  assert.ok(api.dispatch_({ action: 'create', accessToken, tool }).id);
 });
 
 test('profile save allows clearing optional fields and stores formula-like text safely', () => {
@@ -177,16 +201,22 @@ test('duplicate profile email rows fail closed', () => {
 test('accept standard OIDC scopes without requiring a scope claim in the access token', () => {
   const api = runtime();
   for (const claims of [{}, { scope: undefined }]) {
-    assert.equal(api.dispatch_({ action: 'list', accessToken: token(claims) }).email, 'alice@example.com');
+    const accessToken = token(claims);
+    api.dispatch_({ action: 'saveProfile', accessToken, profile: {} });
+    assert.equal(api.dispatch_({ action: 'list', accessToken }).email, 'alice@example.com');
   }
 });
 
 test('ES256 access tokens are verified with EC keys; email verification can be relaxed explicitly', () => {
   const strict = runtime();
   assert.throws(() => strict.dispatch_({ action: 'list', accessToken: es256Token() }), /FORBIDDEN/);
-  assert.equal(strict.dispatch_({ action: 'list', accessToken: es256Token({ email_verified: true }) }).email, 'alice@example.com');
+  const strictToken = es256Token({ email_verified: true });
+  strict.dispatch_({ action: 'saveProfile', accessToken: strictToken, profile: {} });
+  assert.equal(strict.dispatch_({ action: 'list', accessToken: strictToken }).email, 'alice@example.com');
   const relaxed = runtime({ OIDC_REQUIRE_EMAIL_VERIFIED: 'false' });
-  assert.equal(relaxed.dispatch_({ action: 'list', accessToken: es256Token() }).email, 'alice@example.com');
+  const relaxedToken = es256Token();
+  relaxed.dispatch_({ action: 'saveProfile', accessToken: relaxedToken, profile: {} });
+  assert.equal(relaxed.dispatch_({ action: 'list', accessToken: relaxedToken }).email, 'alice@example.com');
   const other = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
   for (const value of [es256Token({}, {}, other.privateKey), es256Token({}, { alg: 'RS256' }), es256Token({ aud: 'frontend-client' }),
       es256Token({ exp: 0 }), es256Token({}, { kid: 'test' })]) {
@@ -210,6 +240,7 @@ test('validation rejects oversized/invalid input and ignores client-controlled i
   assert.throws(() => api.validateTool_({ ...tool, name: ' ' }), /BAD_REQUEST/);
   assert.throws(() => api.validateTool_({ ...tool, shared: 'true' }), /BAD_REQUEST/);
   assert.throws(() => api.validateTool_({ ...tool, description: 'a'.repeat(1001) }), /BAD_REQUEST/);
+  api.dispatch_({ action: 'saveProfile', accessToken: token(), profile: {} });
   const saved = api.dispatch_({ action: 'create', accessToken: token(), tool: { ...tool, name: '=IMPORTXML("x")', email: 'bob@example.com' } });
   assert.equal(saved.email, undefined);
   assert.equal(saved.name, '=IMPORTXML("x")');
@@ -219,4 +250,5 @@ test('transport returns structured errors without leaking internals', () => {
   const api = runtime();
   assert.equal(api.doPost({ postData: { contents: '{' } }).error, 'INTERNAL');
   assert.equal(api.doPost({ postData: { contents: JSON.stringify({ action: 'list', accessToken: 'bad' }) } }).error, 'UNAUTHORIZED');
+  assert.equal(api.doPost({ postData: { contents: JSON.stringify({ action: 'list', accessToken: token() }) } }).error, 'PROFILE_REQUIRED');
 });

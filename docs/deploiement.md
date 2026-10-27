@@ -140,11 +140,19 @@ client, meme temporairement. GitHub Pages n'offre pas de serveur pour le cacher.
   d'ajouter un e-mail ou un nom de feuille falsifie au corps et verifier que
   seule l'identite du JWT est utilisee. Verifier que les champs vides sont
   acceptes et qu'un retour a la ligne est refuse.
+- Avec un compte sans ligne `Profils`, verifier que la connexion ouvre le
+  formulaire requis, que chaque champ reste facultatif et que « Continuer »
+  sans saisie cree la ligne et debloque l'inventaire. Cette recette s'applique
+  aussi aux comptes possedant deja un onglet d'outils sans ligne de profil.
+  Appeler directement les actions `list`, `create`, `update` et `delete` avant
+  la creation : elles doivent toutes retourner `PROFILE_REQUIRED`.
 - Annuler la confirmation de suppression du profil et verifier qu'aucune donnee
   ne change. La confirmer ensuite : seule la ligne du compte et son onglet
-  d'outils doivent disparaitre ; un rechargement ne doit pas recreer l'onglet.
-  Verifier que l'autre compte reste intact. Si une erreur survient pendant les
-  deux suppressions Sheets, verifier les deux donnees et relancer l'action si
+  d'outils doivent disparaitre ; l'interface doit revenir au formulaire requis
+  et les actions outils doivent etre refusees par le serveur jusqu'a la creation
+  d'un nouveau profil. Un rechargement ne doit pas recreer l'onglet. Verifier
+  que l'autre compte reste intact. Si une erreur survient pendant les deux
+  suppressions Sheets, verifier les deux donnees et relancer l'action si
   necessaire.
 - Verifier refus d'un JWT expire, falsifie, d'un autre issuer/audience ou sans
    e-mail verifie ; verifier aussi le refus d'un ID token.
@@ -155,8 +163,9 @@ client, meme temporairement. GitHub Pages n'offre pas de serveur pour le cacher.
   l'expiration exige une nouvelle connexion et efface la session locale. Verifier
   la deconnexion, le refus du consentement, un callback sans etat local et les
   erreurs reseau. Le menu de compte doit montrer l'adresse complete, sans
-  troncature et avec retour a la ligne si necessaire, et ne proposer que la
-  deconnexion, y compris sur smartphone.
+  troncature et avec retour a la ligne si necessaire, et proposer le profil et
+  la deconnexion, y compris sur smartphone. Le profil s'ouvre dans la page
+  principale et porte l'action de suppression, avec confirmation.
 - Inspecter le stockage OIDC du navigateur : aucun refresh token ne doit etre
   conserve. Le choix `localStorage` expose les bearer tokens a tout script execute
   sur l'origine ; proteger l'origine contre les XSS et ne jamais journaliser les

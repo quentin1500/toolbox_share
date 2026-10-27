@@ -28,7 +28,8 @@ seront publiques, meme si leur origine est un secret GitHub.
 
 - Connexion, expiration et deconnexion locale.
 - Inventaire personnel : liste, recherche, filtres, ajout, modification, suppression.
-- Profil prive : nom, telephone et adresse facultatifs ; suppression confirmee du profil et de l'onglet d'outils.
+- Profil prive obligatoire a la premiere connexion (champs facultatifs) ;
+  suppression confirmee du profil et de l'onglet d'outils.
 - Backend : verifications cryptographiques RS256/ES256 et droits limites a son profil et son onglet.
 - Indicateur de partage prepare, sans publication effective pour le moment.
 - Le catalogue des autres utilisateurs et les demandes restent des prochaines
