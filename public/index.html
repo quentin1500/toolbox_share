@@ -17,26 +17,30 @@
 <body>
   <header class="topbar">
     <a class="brand" href="./" aria-label="Toolbox Share, accueil"><span class="brand-icon"><img src="assets/icons/hammer.svg" alt="" width="23" height="23"></span>Toolbox Share</a>
+  </header>
+  <div class="account-bar">
+    <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-expanded="true" aria-controls="sidebar" aria-label="Afficher ou masquer le menu Mon espace">Mon espace</button>
     <div class="account">
       <button id="auth-button" class="button secondary" type="button"><img src="assets/icons/log-in.svg" alt="">Se connecter</button>
       <div id="account-menu" class="account-menu" hidden>
         <button id="account-button" class="account-trigger" type="button" aria-haspopup="menu" aria-expanded="false">
-          <span id="account-email" class="account-email"></span><span class="account-chevron" aria-hidden="true"></span>
+          <span id="account-email" class="account-email"></span><span id="account-notification" class="notification-dot account-notification" aria-hidden="true" hidden></span><span class="account-chevron" aria-hidden="true"></span>
         </button>
         <div id="account-menu-options" class="account-menu-options" role="menu" hidden>
           <p id="account-menu-email" class="account-menu-email"></p>
+          <button id="friends-button" type="button" role="menuitem" hidden><span class="menu-icon"><img src="assets/icons/users.svg" alt=""> <span id="friends-notification" class="notification-dot" hidden></span></span>Mes amis</button>
           <button id="profile-button" type="button" role="menuitem"><img src="assets/icons/users.svg" alt="">Mon profil</button>
           <button id="logout-button" type="button" role="menuitem"><img src="assets/icons/log-out.svg" alt="">Se déconnecter</button>
         </div>
       </div>
     </div>
-  </header>
-  <div class="shell">
-    <aside class="sidebar" aria-label="Navigation principale">
+  </div>
+  <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
+  <div id="shell" class="shell">
+    <aside id="sidebar" class="sidebar" aria-label="Navigation principale">
       <p class="nav-label">MON ESPACE</p>
       <a class="nav-item active" href="#outils" aria-current="page"><img src="assets/icons/wrench.svg" alt="">Ma boîte à outils<span id="nav-count">0</span></a>
-      <div class="nav-future"><img src="assets/icons/users.svg" alt=""><span>Les outils du quartier<small>Prochaine escale</small></span></div>
-      <div class="nav-future"><img src="assets/icons/arrow-left-right.svg" alt=""><span>Mes demandes<small>Prochaine escale</small></span></div>
+      <a id="neighborhood-navigation" class="nav-item" href="#quartier" hidden><img src="assets/icons/users.svg" alt="">Les outils du quartier</a>
       <div class="sidebar-bottom"><span class="small-dot"></span>Moins acheter, plus partager.</div>
     </aside>
     <main id="outils">
@@ -57,7 +61,7 @@
         </section>
         <section class="inventory-summary" aria-label="Résumé de votre inventaire">
           <div><strong id="total-count">0</strong><span>outils dans ma boîte</span></div>
-          <div><strong id="shared-count">0</strong><span>avec partage prévu</span></div>
+          <div><strong id="shared-count">0</strong><span id="shared-count-label">partagés avec mes amis</span></div>
           <div id="mode-status" class="session-status"><span id="mode-badge" class="badge">Démonstration</span></div>
         </section>
         <section class="inventory" aria-labelledby="inventory-title">
@@ -65,7 +69,7 @@
           <div class="filters">
             <label class="search"><img src="assets/icons/search.svg" alt=""><input id="search" type="search" placeholder="Rechercher un outil…" aria-label="Rechercher un outil" maxlength="100"></label>
             <label class="select-filter"><span class="sr-only">Catégorie</span><select id="category-filter"><option value="">Toutes les catégories</option><option value="Percage">Perçage</option><option value="Decoupe">Découpe</option><option value="Jardin">Jardin</option><option value="Mesure">Mesure</option><option value="A main">À main</option><option value="Autre">Autre</option></select></label>
-            <label class="select-filter"><span class="sr-only">Partage</span><select id="sharing-filter"><option value="">Tous les outils</option><option value="shared">Partage prévu</option><option value="private">Privés</option></select></label>
+            <label class="select-filter"><span class="sr-only">Partage</span><select id="sharing-filter"><option value="">Tous les outils</option><option value="shared">Partagés avec mes amis</option><option value="private">Privés</option></select></label>
           </div>
           <div id="tool-grid" class="tool-grid" aria-busy="false"></div>
           <div id="empty-state" class="empty-state" hidden><img src="assets/icons/wrench.svg" alt="" width="36" height="36"><h3 id="empty-title">Votre boîte attend son premier outil.</h3><p id="empty-description">Ajoutez le matériel que vous avez sous la main.</p></div>
@@ -78,7 +82,7 @@
           <button id="profile-back-button" class="button secondary" type="button">Retour à ma boîte</button>
         </div>
         <div class="profile-card">
-          <p id="profile-help" class="profile-help">Ces informations restent privées et peuvent être effacées à tout moment.</p>
+          <p id="profile-help" class="profile-help">Ces informations sont visibles uniquement par vos amis acceptés et peuvent être effacées à tout moment.</p>
           <form id="profile-form">
             <label>Nom et prénom<input name="name" autocomplete="name" maxlength="120"></label>
             <label>Numéro de téléphone<input name="phone" type="tel" autocomplete="tel" maxlength="50"></label>
@@ -95,12 +99,43 @@
           </form>
         </div>
       </section>
+      <section id="friends-page" class="social-page" aria-labelledby="friends-title" hidden>
+        <div class="page-heading">
+          <div><p class="eyebrow">VOTRE CERCLE</p><h1 id="friends-title" tabindex="-1">Mes amis<span>.</span></h1></div>
+          <div class="heading-actions">
+            <button id="friends-refresh-button" class="icon-button" type="button" title="Actualiser les demandes" aria-label="Actualiser les demandes"><img src="assets/icons/refresh-cw.svg" alt=""></button>
+            <button id="add-friend-button" class="button primary" type="button"><img src="assets/icons/plus.svg" alt="">Ajouter un ami</button>
+          </div>
+        </div>
+        <div class="friend-tabs" role="tablist" aria-label="Relations">
+          <button id="friends-tab" type="button" role="tab" aria-selected="true" aria-controls="friends-list">Amis <span id="friend-count">0</span></button>
+          <button id="sent-tab" type="button" role="tab" aria-selected="false" aria-controls="friends-list">Demandes envoyées <span id="sent-count">0</span></button>
+          <button id="received-tab" type="button" role="tab" aria-selected="false" aria-controls="friends-list">Demandes reçues <span id="received-count">0</span><span id="received-notification" class="notification-dot" hidden></span></button>
+        </div>
+        <div id="friends-list" class="friend-list" role="tabpanel" aria-labelledby="friends-tab" aria-live="polite"></div>
+      </section>
+      <section id="neighborhood-page" class="social-page" aria-labelledby="neighborhood-title" hidden>
+        <div class="page-heading">
+          <div><p class="eyebrow">À DÉCOUVRIR</p><h1 id="neighborhood-title" tabindex="-1">Les outils du quartier<span>.</span></h1></div>
+          <button id="neighborhood-refresh-button" class="icon-button" type="button" title="Actualiser les outils" aria-label="Actualiser les outils"><img src="assets/icons/refresh-cw.svg" alt=""></button>
+        </div>
+        <section class="inventory" aria-labelledby="neighborhood-inventory-title">
+          <div class="inventory-title"><h2 id="neighborhood-inventory-title">Les outils de mes amis <span id="neighborhood-count">0 outil</span></h2></div>
+          <div class="filters neighborhood-filters">
+            <label class="search"><img src="assets/icons/search.svg" alt=""><input id="neighborhood-search" type="search" placeholder="Rechercher un outil ou un ami…" aria-label="Rechercher un outil ou un ami" maxlength="160"></label>
+            <label class="select-filter"><span class="sr-only">Catégorie</span><select id="neighborhood-category"><option value="">Toutes les catégories</option><option value="Percage">Perçage</option><option value="Decoupe">Découpe</option><option value="Jardin">Jardin</option><option value="Mesure">Mesure</option><option value="A main">À main</option><option value="Autre">Autre</option></select></label>
+            <label class="select-filter"><span class="sr-only">État</span><select id="neighborhood-condition"><option value="">Tous les états</option><option value="Tres bon">Très bon</option><option value="Bon">Bon</option><option value="Usage">Usagé</option></select></label>
+          </div>
+          <div id="neighborhood-grid" class="tool-grid" aria-busy="false"></div>
+          <div id="neighborhood-empty-state" class="empty-state" hidden><img src="assets/icons/wrench.svg" alt="" width="36" height="36"><h3 id="neighborhood-empty-title">Aucun outil partagé pour le moment.</h3><p id="neighborhood-empty-description">Les outils partagés de vos amis apparaîtront ici.</p></div>
+        </section>
+      </section>
     </main>
   </div>
   <template id="tool-template">
     <article class="tool-card">
       <div class="tool-visual"><img class="tool-illustration" alt="" width="76" height="76"><span class="sharing-badge"></span></div>
-      <div class="tool-content"><p class="tool-category"></p><h3></h3><p class="tool-description"></p><div class="tool-bottom"><span class="condition"></span><div class="tool-actions"><button class="icon-button edit" type="button"><img src="assets/icons/pencil.svg" alt=""></button><button class="icon-button delete" type="button"><img src="assets/icons/trash-2.svg" alt=""></button></div></div></div>
+      <div class="tool-content"><p class="tool-category"></p><h3></h3><p class="tool-owner"></p><p class="tool-description"></p><div class="tool-bottom"><span class="condition"></span><div class="tool-actions"><button class="icon-button edit" type="button"><img src="assets/icons/pencil.svg" alt=""></button><button class="icon-button delete" type="button"><img src="assets/icons/trash-2.svg" alt=""></button></div></div></div>
     </article>
   </template>
   <dialog id="tool-dialog" aria-labelledby="dialog-title">
@@ -109,16 +144,33 @@
       <label>Nom de l'outil<input name="name" required maxlength="100" placeholder="Ex. Perceuse sans fil"></label>
       <div class="form-row"><label>Catégorie<select name="category" required><option value="Percage">Perçage</option><option value="Decoupe">Découpe</option><option value="Jardin">Jardin</option><option value="Mesure">Mesure</option><option value="A main">À main</option><option value="Autre">Autre</option></select></label><label>État<select name="condition" required><option value="Tres bon">Très bon</option><option value="Bon">Bon</option><option value="Usage">Usagé</option></select></label></div>
       <label>Description<textarea name="description" rows="3" maxlength="1000" placeholder="Marque, accessoires, particularités…"></textarea></label>
-      <label class="checkbox-label"><input type="checkbox" name="shared"><span>Prévoir de partager cet outil<small>Le catalogue public sera disponible lors d'une prochaine étape.</small></span></label>
+      <label class="checkbox-label"><input type="checkbox" name="shared"><span><span id="tool-sharing-label">Partager cet outil avec mes amis</span><small id="tool-sharing-help">Vos amis acceptés le verront dans « Les outils du quartier ».</small></span></label>
       <p id="form-error" class="form-error" role="alert" hidden></p>
       <div class="dialog-actions"><button type="button" id="cancel-dialog" class="button secondary">Annuler</button><button type="submit" id="save-button" class="button primary">Enregistrer l'outil</button></div>
+    </form>
+  </dialog>
+  <dialog id="friend-request-dialog" aria-labelledby="friend-request-title">
+    <form id="friend-request-form">
+      <div class="dialog-heading"><div><p class="eyebrow">VOTRE CERCLE</p><h2 id="friend-request-title">Ajouter un ami</h2></div><button class="icon-button" type="button" id="close-friend-request" aria-label="Fermer"><img src="assets/icons/x.svg" alt=""></button></div>
+      <label>Email de votre ami<input name="email" type="email" required maxlength="254" autocomplete="email" placeholder="ami@exemple.fr"></label>
+      <p class="profile-help">Si cette adresse correspond à un compte actif, une demande lui sera transmise. Vos informations de profil ne seront visibles qu’après acceptation.</p>
+      <p id="friend-request-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" id="cancel-friend-request" class="button secondary">Annuler</button><button type="submit" id="send-friend-request" class="button primary">Envoyer la demande</button></div>
+    </form>
+  </dialog>
+  <dialog id="friend-remove-dialog" aria-labelledby="friend-remove-title">
+    <form id="friend-remove-form">
+      <h2 id="friend-remove-title">Résilier cette demande ?</h2>
+      <p id="friend-remove-description"></p>
+      <p id="friend-remove-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" id="cancel-friend-remove" class="button secondary">Annuler</button><button type="submit" id="confirm-friend-remove" class="button danger">Résilier la demande</button></div>
     </form>
   </dialog>
   <dialog id="delete-dialog" aria-labelledby="delete-title"><form id="delete-form"><h2 id="delete-title">Supprimer cet outil ?</h2><p id="delete-description"></p><p>Cette action est définitive.</p><p id="delete-error" class="form-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" id="cancel-delete" class="button secondary">Conserver</button><button id="confirm-delete" type="submit" class="button danger">Supprimer</button></div></form></dialog>
   <dialog id="profile-delete-dialog" aria-labelledby="profile-delete-title">
     <form id="profile-delete-form">
       <h2 id="profile-delete-title">Supprimer votre profil ?</h2>
-      <p>Cette action supprimera définitivement vos informations de profil et l’onglet contenant tous vos outils. Elle ne peut pas être annulée.</p>
+      <p>Cette action supprimera définitivement vos informations de profil, toutes vos demandes et amitiés, ainsi que l’onglet contenant tous vos outils. Elle ne peut pas être annulée.</p>
       <p id="profile-delete-error" class="form-error" role="alert" hidden></p>
       <div class="dialog-actions"><button type="button" id="cancel-profile-delete" class="button secondary">Garder mon profil</button><button type="submit" id="confirm-profile-delete" class="button danger">Tout supprimer</button></div>
     </form>

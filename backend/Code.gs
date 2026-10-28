@@ -93,7 +93,11 @@ function dispatch_(request) {
   if (!request || typeof request !== 'object') throw new Error('BAD_REQUEST');
   var config = configuration_();
   var identity = verifyJwt_(request.accessToken, config);
-  var actions = ['list', 'create', 'update', 'delete', 'getProfile', 'saveProfile', 'deleteProfile'];
+  var actions = [
+    'list', 'create', 'update', 'delete', 'getProfile', 'saveProfile', 'deleteProfile',
+    'getFriendStatus', 'listFriends', 'sendFriendRequest', 'respondFriendRequest',
+    'removeFriendship', 'listNeighborhoodTools'
+  ];
   var profiles;
   if (actions.indexOf(request.action) < 0) throw new Error('BAD_REQUEST');
   var lock = LockService.getScriptLock();
@@ -109,6 +113,19 @@ function dispatch_(request) {
     }
     profiles = profileSheet_(book);
     if (!profileRow_(profiles, identity.email)) throw new Error('PROFILE_REQUIRED');
+    if (['getFriendStatus', 'listFriends', 'sendFriendRequest', 'respondFriendRequest', 'removeFriendship', 'listNeighborhoodTools'].indexOf(request.action) >= 0) {
+      var friendships = friendSheet_(book);
+      if (request.action === 'getFriendStatus') return getFriendStatus_(friendships, identity.email);
+      if (request.action === 'listFriends') return listFriends_(profiles, friendships, identity.email);
+      if (request.action === 'sendFriendRequest') return sendFriendRequest_(profiles, friendships, identity.email, request.email);
+      if (request.action === 'respondFriendRequest') {
+        return respondFriendRequest_(friendships, identity.email, request.email, request.decision);
+      }
+      if (request.action === 'removeFriendship') {
+        return removeFriendship_(friendships, identity.email, request.email);
+      }
+      return listNeighborhoodTools_(profiles, friendships, identity.email, book);
+    }
     var sheetName = userSheetName_(identity.email);
     var sheet = book.getSheetByName(sheetName);
     if (!sheet && request.action === 'list') return { email: identity.email, tools: [] };
@@ -196,9 +213,161 @@ function saveProfile_(sheet, email, input) {
 
 function deleteProfile_(book, profiles, email) {
   var row = profileRow_(profiles, email);
+  var friendships = book.getSheetByName('Amities');
+  if (friendships) {
+    friendships = friendSheet_(book);
+    friendRows_(friendships).filter(function (friendship) {
+      return friendship.email1 === email || friendship.email2 === email;
+    }).map(function (friendship) { return friendship.row; }).sort(function (a, b) { return b - a; })
+      .forEach(function (friendRow) { friendships.deleteRow(friendRow); });
+  }
   if (row) profiles.deleteRow(row);
   var tools = book.getSheetByName(userSheetName_(email));
   if (tools) book.deleteSheet(tools);
+}
+
+function friendSheet_(book) {
+  var sheet = book.getSheetByName('Amities');
+  if (!sheet) {
+    sheet = book.insertSheet('Amities');
+    sheet.appendRow(['email_1', 'email_2', 'demandeur', 'statut']);
+    sheet.setFrozenRows(1);
+  }
+  var headers = sheet.getRange(1, 1, 1, 4).getValues()[0];
+  if (headers.join('|') !== 'email_1|email_2|demandeur|statut') throw new Error('CONFIGURATION');
+  return sheet;
+}
+
+function normalizedEmail_(value) {
+  if (typeof value !== 'string' || value.length > 254) throw new Error('BAD_REQUEST');
+  var email = value.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('BAD_REQUEST');
+  return email;
+}
+
+function friendPair_(email1, email2) {
+  return email1 < email2 ? [email1, email2] : [email2, email1];
+}
+
+function friendRows_(sheet) {
+  var rows = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues() : [];
+  var seen = {};
+  return rows.map(function (row, index) {
+    var email1;
+    var email2;
+    var requester;
+    try {
+      email1 = normalizedEmail_(row[0]);
+      email2 = normalizedEmail_(row[1]);
+      requester = normalizedEmail_(row[2]);
+    } catch (error) {
+      throw new Error('INTERNAL');
+    }
+    var pair = friendPair_(email1, email2);
+    var key = pair[0] + '\n' + pair[1];
+    if (row[0] !== email1 || row[1] !== email2 || row[2] !== requester ||
+        email1 === email2 || pair[0] !== email1 || pair[1] !== email2 ||
+        (requester !== email1 && requester !== email2) ||
+        ['en attente', 'accepté'].indexOf(row[3]) < 0 || seen[key]) {
+      throw new Error('INTERNAL');
+    }
+    seen[key] = true;
+    return { row: index + 2, email1: email1, email2: email2, requester: requester, status: row[3] };
+  });
+}
+
+function getFriendStatus_(sheet, email) {
+  var incoming = friendRows_(sheet).filter(function (friendship) {
+    return friendship.status === 'en attente' && friendship.requester !== email &&
+      (friendship.email1 === email || friendship.email2 === email);
+  }).length;
+  return { incomingCount: incoming };
+}
+
+function listFriends_(profiles, sheet, email) {
+  var result = { friends: [], sent: [], received: [] };
+  friendRows_(sheet).forEach(function (friendship) {
+    if (friendship.email1 !== email && friendship.email2 !== email) return;
+    var other = friendship.email1 === email ? friendship.email2 : friendship.email1;
+    if (friendship.status === 'accepté') {
+      var profile = getProfile_(profiles, other);
+      if (!profile.exists) throw new Error('INTERNAL');
+      result.friends.push({ email: other, name: profile.name, phone: profile.phone, address: profile.address });
+    } else if (friendship.requester === email) {
+      result.sent.push({ email: other });
+    } else {
+      result.received.push({ email: other });
+    }
+  });
+  return result;
+}
+
+function sendFriendRequest_(profiles, sheet, sender, recipientValue) {
+  var recipient = normalizedEmail_(recipientValue);
+  if (recipient === sender) throw new Error('BAD_REQUEST');
+  var recipientRow = profileRow_(profiles, recipient);
+  if (recipientRow) {
+    var pair = friendPair_(sender, recipient);
+    var exists = friendRows_(sheet).some(function (friendship) {
+      return friendship.email1 === pair[0] && friendship.email2 === pair[1];
+    });
+    if (!exists) sheet.appendRow([pair[0], pair[1], sender, 'en attente']);
+  }
+  return { submitted: true };
+}
+
+function respondFriendRequest_(sheet, recipient, requesterValue, decision) {
+  var requester = normalizedEmail_(requesterValue);
+  if (requester === recipient || ['accept', 'decline'].indexOf(decision) < 0) throw new Error('BAD_REQUEST');
+  var pair = friendPair_(recipient, requester);
+  var friendship = friendRows_(sheet).filter(function (item) {
+    return item.email1 === pair[0] && item.email2 === pair[1];
+  })[0];
+  if (!friendship) throw new Error('NOT_FOUND');
+  if (friendship.requester === recipient) throw new Error('FORBIDDEN');
+  if (friendship.status !== 'en attente') throw new Error('NOT_FOUND');
+  if (decision === 'accept') {
+    sheet.getRange(friendship.row, 1, 1, 4).setValues([[
+      friendship.email1, friendship.email2, friendship.requester, 'accepté'
+    ]]);
+    return { status: 'accepté' };
+  }
+  sheet.deleteRow(friendship.row);
+  return { status: 'refusé' };
+}
+
+function removeFriendship_(sheet, actor, otherValue) {
+  var other = normalizedEmail_(otherValue);
+  if (other === actor) throw new Error('BAD_REQUEST');
+  var pair = friendPair_(actor, other);
+  var friendship = friendRows_(sheet).filter(function (item) {
+    return item.email1 === pair[0] && item.email2 === pair[1];
+  })[0];
+  if (!friendship) throw new Error('NOT_FOUND');
+  if (friendship.email1 !== actor && friendship.email2 !== actor) throw new Error('FORBIDDEN');
+  sheet.deleteRow(friendship.row);
+  return { removed: true };
+}
+
+function listNeighborhoodTools_(profiles, friendships, email, book) {
+  var tools = [];
+  friendRows_(friendships).forEach(function (friendship) {
+    if (friendship.status !== 'accepté' || (friendship.email1 !== email && friendship.email2 !== email)) return;
+    var ownerEmail = friendship.email1 === email ? friendship.email2 : friendship.email1;
+    var profile = getProfile_(profiles, ownerEmail);
+    if (!profile.exists) throw new Error('INTERNAL');
+    var sheet = book.getSheetByName(userSheetName_(ownerEmail));
+    if (!sheet || sheet.getLastRow() < 2) return;
+    sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues().forEach(function (row) {
+      var tool = JSON.parse(row[1]);
+      if (tool.shared !== true) return;
+      tools.push({
+        id: tool.id, name: tool.name, category: tool.category, description: tool.description,
+        condition: tool.condition, shared: true, ownerEmail: ownerEmail, ownerName: profile.name
+      });
+    });
+  });
+  return { tools: tools };
 }
 
 function validateProfile_(input) {

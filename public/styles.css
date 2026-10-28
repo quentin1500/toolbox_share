@@ -1,5 +1,6 @@
 :root {
   color-scheme: light;
+  --app-chrome-height: 147px;
   --ink: #202923;
   --muted: #69756d;
   --green: #286148;
@@ -101,12 +102,11 @@ textarea:focus-visible {
   min-height: 82px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 20px;
   padding: 12px 38px;
   color: #f8faf7;
   background: var(--green-dark);
-  border-bottom: 1px solid #163c2c;
 }
 
 .brand {
@@ -146,6 +146,39 @@ textarea:focus-visible {
   position: relative;
 }
 
+.account-bar {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 38px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.sidebar-toggle {
+  min-height: 42px;
+  padding: 8px 16px;
+  color: var(--green-dark);
+  background: #e6eee7;
+  border: 1px solid #cbd9ce;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sidebar-toggle:hover {
+  background: #dce8de;
+}
+
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(19, 29, 24, 0.22);
+}
+
 .account-trigger {
   min-height: 42px;
   max-width: min(290px, 32vw);
@@ -166,6 +199,10 @@ textarea:focus-visible {
 .account-trigger:hover,
 .account-trigger[aria-expanded="true"] {
   background: #ffffff24;
+}
+
+.account-notification {
+  flex: 0 0 9px;
 }
 
 .account-email {
@@ -236,7 +273,8 @@ textarea:focus-visible {
   background: #f6e3de;
 }
 
-.account-menu-options #profile-button:hover {
+.account-menu-options #profile-button:hover,
+.account-menu-options #friends-button:hover {
   color: var(--green-dark);
   background: var(--green-light);
 }
@@ -244,6 +282,27 @@ textarea:focus-visible {
 .account-menu-options img {
   width: 17px;
   height: 17px;
+}
+
+.menu-icon {
+  position: relative;
+  display: inline-flex;
+}
+
+.notification-dot {
+  width: 9px;
+  height: 9px;
+  display: inline-block;
+  flex: 0 0 9px;
+  background: #d83a32;
+  border: 1.5px solid var(--surface);
+  border-radius: 50%;
+}
+
+.menu-icon .notification-dot {
+  position: absolute;
+  top: -3px;
+  right: -4px;
 }
 
 .button {
@@ -285,10 +344,21 @@ textarea:focus-visible {
   border-color: #c6d1c8;
 }
 
-.topbar .button.secondary {
+.account-bar .button.secondary {
   color: var(--ink);
   background: #f6f8f5;
   border-color: #e2e9e3;
+}
+
+.account-bar .account-trigger {
+  color: var(--ink);
+  background: #fff;
+  border-color: #cbd5cc;
+}
+
+.account-bar .account-trigger:hover,
+.account-bar .account-trigger[aria-expanded="true"] {
+  background: #f0f4f0;
 }
 
 .button.secondary:hover {
@@ -303,7 +373,15 @@ textarea:focus-visible {
 .shell {
   display: grid;
   grid-template-columns: 238px minmax(0, 1fr);
-  min-height: calc(100vh - 82px);
+  min-height: calc(100vh - var(--app-chrome-height));
+}
+
+.shell.sidebar-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.shell.sidebar-collapsed .sidebar {
+  display: none;
 }
 
 .sidebar {
@@ -348,6 +426,10 @@ textarea:focus-visible {
   font-weight: 700;
 }
 
+.nav-item:hover {
+  background: #c8d9cc80;
+}
+
 .nav-item > span {
   margin-left: auto;
   font-size: 12px;
@@ -387,6 +469,7 @@ textarea:focus-visible {
 
 main {
   width: 100%;
+  min-width: 0;
   max-width: 1370px;
   margin: auto;
   padding: 30px 46px 22px;
@@ -995,6 +1078,121 @@ form textarea {
   filter: brightness(0) invert(1);
 }
 
+.social-page {
+  max-width: 1040px;
+}
+
+.heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.friend-tabs {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 20px;
+  padding: 5px;
+  overflow-x: auto;
+  background: #dde5dd;
+  border-radius: 13px;
+}
+
+.friend-tabs button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 8px 13px;
+  color: #536057;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.friend-tabs button[aria-selected="true"] {
+  color: var(--green-dark);
+  background: var(--surface);
+  box-shadow: 0 2px 6px #20332612;
+}
+
+.friend-tabs button > span:not(.notification-dot) {
+  min-width: 20px;
+  padding: 1px 6px;
+  color: var(--muted);
+  background: #e8eee8;
+  border-radius: 999px;
+  font-size: 11px;
+  text-align: center;
+}
+
+.friend-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 14px;
+}
+
+.friend-card {
+  min-width: 0;
+  padding: 20px;
+  overflow-wrap: anywhere;
+  background: var(--surface);
+  border: 1px solid #d1dbd2;
+  border-radius: 15px;
+  box-shadow: 0 3px 10px #253b2a0c;
+}
+
+.friend-card h2 {
+  margin-bottom: 7px;
+  font-size: 17px;
+}
+
+.friend-email,
+.friend-detail {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.friend-detail {
+  margin-top: 6px;
+}
+
+.friend-actions {
+  display: flex;
+  gap: 9px;
+  margin-top: 18px;
+}
+
+.friend-actions .button {
+  min-height: 38px;
+  padding: 8px 13px;
+  font-size: 12px;
+}
+
+.social-empty {
+  grid-column: 1 / -1;
+  padding: 25px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px dashed #c3d0c4;
+  border-radius: 14px;
+  text-align: center;
+}
+
+.tool-owner {
+  margin-top: 6px;
+  color: var(--green);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.tool-owner:empty {
+  display: none;
+}
+
 @keyframes arrive {
   from {
     opacity: 0;
@@ -1062,20 +1260,41 @@ form textarea {
 }
 
 @media (max-width: 850px) {
+  :root {
+    --app-chrome-height: 137px;
+  }
+
   .tool-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sidebar {
-    display: none;
+    position: fixed;
+    top: var(--app-chrome-height);
+    left: 0;
+    z-index: 60;
+    width: min(290px, calc(100vw - 24px));
+    height: calc(100dvh - var(--app-chrome-height));
+    padding: 18px 12px 28px;
+    transform: translateX(-101%);
+    transition: transform .2s ease;
+    box-shadow: 0 18px 38px rgba(19, 29, 24, 0.18);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
   }
 
   .topbar {
     min-height: 72px;
+    padding: 10px 24px;
+  }
+
+  .account-bar {
     padding: 10px 24px;
   }
 
@@ -1094,6 +1313,10 @@ form textarea {
 }
 
 @media (max-width: 520px) {
+  :root {
+    --app-chrome-height: 124px;
+  }
+
   .topbar {
     min-height: 68px;
     gap: 10px;
@@ -1111,6 +1334,18 @@ form textarea {
 
   .account {
     gap: 8px;
+  }
+
+  .account-bar {
+    min-height: 56px;
+    gap: 8px;
+    padding: 8px 17px;
+  }
+
+  .sidebar-toggle {
+    min-height: 38px;
+    padding: 7px 12px;
+    font-size: 12px;
   }
 
   .account-trigger {
@@ -1152,6 +1387,14 @@ form textarea {
 
   .page-heading > .button {
     width: 100%;
+  }
+
+  .heading-actions {
+    width: 100%;
+  }
+
+  .heading-actions > .button {
+    flex: 1;
   }
 
   .workshop-banner {

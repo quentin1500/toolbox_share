@@ -30,8 +30,9 @@ Nom et prenom, telephone et adresse restent facultatifs ; chaque valeur vide est
 conservee, y compris quand tous les champs sont effaces. Les limites sont de 120,
 50 et 500 caracteres. Les caracteres de controle, notamment CR et LF, sont
 refuses afin qu'une valeur ne puisse pas deborder sur une autre ligne. Les
-valeurs ressemblant a des formules Sheets sont ecrites comme texte. Le profil
-n'est pas publie ni partage avec les autres utilisateurs.
+valeurs ressemblant a des formules Sheets sont ecrites comme texte. La visibilite
+initialement privee du profil est completee par l'ADR 0007 : les champs ne sont
+retournes qu'aux amis dont la relation est acceptee.
 
 Le backend exige une ligne de profil avant toutes les actions de gestion des
 outils (`list`, `create`, `update`, `delete`), et renvoie `PROFILE_REQUIRED`
@@ -43,28 +44,31 @@ retrouver leur inventaire.
 Depuis le menu du compte, l'utilisateur peut ouvrir et enregistrer son profil ou
 demander sa suppression. La suppression requiert une confirmation explicite,
 efface sa ligne dans `Profils` et supprime son onglet `u_<SHA-256 de l'e-mail>`
-d'outils. Aucun e-mail ou nom d'onglet fourni par le navigateur ne participe a
-la suppression. L'access token et le compte d'identite ne sont pas revoques ;
-les fonctions restent bloquees jusqu'a la creation d'un nouveau profil, meme vide.
+d'outils. Depuis l'ADR 0007, elle supprime aussi les demandes et amities de
+l'utilisateur dans `Amities`. Aucun e-mail ou nom d'onglet fourni par le
+navigateur ne participe a la suppression. L'access token et le compte d'identite
+ne sont pas revoques ; les fonctions restent bloquees jusqu'a la creation d'un
+nouveau profil, meme vide.
 
 Toutes ces operations partagent le verrou Apps Script existant. Une liste
 d'outils ne recree pas un onglet absent ; la premiere creation d'un outil le
 recree seulement apres la creation du profil. Cette regle rend la suppression
-effective apres rechargement. Google
-Sheets ne fournit pas de transaction entre la suppression de la ligne et celle
-de l'onglet ; en cas d'erreur ou d'interruption, la meme action peut etre
-relancee pour terminer le nettoyage.
+effective apres rechargement. Google Sheets ne fournit pas de transaction entre
+la suppression des relations, de la ligne de profil et de l'onglet ; en cas
+d'erreur ou d'interruption, la meme action peut etre relancee pour terminer le
+nettoyage.
 
 ## Consequences
 
 La feuille contient des coordonnees personnelles sensibles : le classeur et le
 projet Apps Script doivent rester limites aux responsables de confiance. Toute
-lecture retournee au navigateur est limitee a l'utilisateur authentifie. La
+lecture retournee au navigateur est limitee au profil propre et, selon l'ADR
+0007, aux informations explicitement autorisees par une amitie acceptee. La
 suppression est destructive et sans restauration applicative ; une sauvegarde
 administrative peut conserver des copies selon la politique Google du classeur.
 La suppression de profil n'est pas une suppression de compte chez le fournisseur
 d'identite ni une revocation des jetons deja emis.
 
-Les profils restent prives et ne sont pas utilises par le futur catalogue ou les
-futures demandes. Une evolution de leur visibilite necessite un accord et une
-decision d'architecture distincts.
+Les profils ne sont pas publics. Leur visibilite aux amis apres acceptation d'une
+demande est precisee par l'ADR 0007 et ne peut pas etre etendue a d'autres comptes
+sans accord et decision d'architecture distincts.

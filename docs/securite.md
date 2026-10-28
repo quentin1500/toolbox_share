@@ -30,15 +30,19 @@ peut toujours appeler l'API. La validation des bearer tokens reste obligatoire.
 - Audience API distincte du client pour refuser l'ID token, meme sans claim `scope`.
 - Seuls `openid email profile` sont demandes. Ces scopes d'identite ne sont pas
   des permissions metier ; aucun scope applicatif ni claim `scope` n'est requis.
-  Toute identite valide pour l'audience API accede uniquement a son inventaire.
-- E-mail verifie requis ; operations limitees a l'onglet derive cote serveur.
+  Toute identite valide pour l'audience API accede a son inventaire et aux
+  seules donnees sociales autorisees par une relation verifiee cote serveur.
+- E-mail verifie requis ; operations personnelles limitees aux donnees et
+  onglets derives cote serveur.
   Avec `OIDC_REQUIRE_EMAIL_VERIFIED=false`, la garantie repose sur le fournisseur :
   il doit imposer la confirmation de l'e-mail avant la connexion et ne pas laisser
   l'utilisateur modifier le claim `email`. Ne jamais se fier a `user_metadata`.
-- Le profil prive est stocke dans la feuille `Profils`. Son email cle et la
-  suppression de l'onglet d'outils sont derives exclusivement du JWT verifie ;
-  toute valeur `email` ou tout nom de feuille fourni dans le corps est ignore.
-  Aucune lecture de profil n'est retournee a un autre compte.
+- Le profil est stocke dans la feuille privee `Profils`. Son e-mail cle, la
+  suppression de l'onglet d'outils et les relations sociales sont derives
+  exclusivement du JWT verifie ; aucune identite, demandeur, statut, ligne ou
+  nom de feuille fourni dans le corps n'autorise une operation.
+  Seuls les amis dont la relation est acceptee peuvent lire les champs profil ;
+  les autres comptes ne recoivent aucune information de profil.
 - Les actions d'outils (`list`, `create`, `update`, `delete`) exigent cote
   serveur une ligne de profil existante pour l'e-mail signe. L'interface bloque
   aussi l'inventaire jusqu'a l'enregistrement initial, y compris si les trois
@@ -47,15 +51,29 @@ peut toujours appeler l'API. La validation des bearer tokens reste obligatoire.
 - Les champs du profil sont bornes en taille, tous optionnels et refusent les
   caracteres de controle, notamment les sauts de ligne. Les valeurs sont
   protegees contre l'interpretation comme formules Sheets. Le numero de telephone et
-  l'adresse physique sont des donnees personnelles : ne pas les rendre publics
-  ni les inclure dans les journaux.
+  l'adresse physique sont des donnees personnelles : seuls les amis acceptes
+  peuvent les consulter ; ne jamais les rendre publics ni les inclure dans les
+  journaux.
+- Les relations sont enregistrees par paires d'e-mails normalises et tries dans
+  `Amities`. L'API n'expose pas l'existence d'un compte destinataire dans le
+  resultat d'envoi. Le serveur n'accepte/refuse une demande que si le JWT
+  authentifie son destinataire. Pour `removeFriendship`, l'acteur est derive du
+  JWT et doit etre l'un des deux e-mails de la paire avant suppression ; une
+  relation entre tiers ne peut pas etre ciblee par le client. Les onglets des
+  amis ne sont lus qu'apres controle d'une relation acceptee ; seuls les objets
+  `shared=true` sont retournes.
+- La suppression de profil retire egalement les relations et demandes du compte.
 - Validation serveur des longueurs/types/enumerations et corps limite a 20 000
   caracteres. Cette limite est applicative, pas une limite au niveau reseau.
 - Affichage par `textContent` et formulaires, pas d'injection HTML depuis les
   champs utilisateur ; stockage des champs dans du JSON, pas dans des formules.
 - Verrou Apps Script couvrant lecture/ecriture ; erreurs generiques sans stack.
 - La suppression de profil exige une confirmation dans l'interface, efface la
-  ligne de profil et l'onglet d'outils lie au JWT ; la liste ne recree pas l'onglet.
+  ligne de profil, ses relations et l'onglet d'outils lie au JWT ; la liste ne
+  recree pas l'onglet.
+- La suppression d'une relation exige une confirmation dans l'interface. Toute
+  amitie rompue retire immediatement les autorisations reciproques de lecture du
+  profil et des outils partages lors des prochaines requetes.
 - Referrer-Policy no-referrer, dependances locales et perimetre de publication
   limite a `public/`. Pas de donnees de demonstration sauvegardees.
 
@@ -74,6 +92,11 @@ normale ; un `kid` inconnu peut provoquer des requetes supplementaires au JWKS.
 Le frontal n'impose pas de CSP : en ajouter une stricte et compatible avec les
 endpoints du fournisseur choisi constitue un durcissement a valider avant ouverture.
 Le navigateur peut perdre des champs non enregistres au rechargement/expiration.
+Les trois champs de profil deviennent lisibles par chaque ami accepte ; une
+demande d'amitie mal acceptee expose donc aussi l'adresse et le telephone
+renseignes. Les utilisateurs sont avertis de cette visibilite avant de saisir
+leur profil. Les relations ne sont pas notifiees en temps reel : le point rouge
+est actualise a la connexion ou a l'ouverture/actualisation de la page amis.
 
 Un e-mail reattribue peut exposer l'espace historique au nouveau titulaire.
 Ce risque est bloquant pour une ouverture si le fournisseur ne garantit pas la
@@ -91,6 +114,13 @@ Il verifie aussi l'isolation des profils, le refus de sauts de ligne, les champs
 vides, l'echappement des valeurs de type formule, le blocage de chaque action
 outil sans profil, et la suppression coordonnee du profil et de son onglet sans
 effet sur un autre compte.
+Les tests d'amitie couvrent le tri/normalisation des e-mails, les demandes
+envoyees/recues, l'acceptation reservee au destinataire, le refus, la suppression
+par chacun des participants pour les demandes en attente et les amities acceptees,
+le refus d'une suppression par un tiers, et les doublons,
+la non-divulgation d'un compte cible inconnu, la visibilite des profils apres
+acceptation, l'exclusion des outils prives et le nettoyage des relations lors
+d'une suppression de profil.
 Il verifie egalement le succes avec les scopes OIDC standard ou sans claim
 `scope`, ainsi que le refus d'une audience client meme en l'absence de ce claim.
 

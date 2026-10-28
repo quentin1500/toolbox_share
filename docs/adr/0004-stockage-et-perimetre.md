@@ -27,9 +27,11 @@ des e-mails, ou faire approuver une evolution vers une cle `iss` + `sub` AVANT u
 ouverture a un public dont les e-mails peuvent etre reattribues. Une migration
 manuelle controlee est decrite dans le guide d'exploitation.
 
-La gestion des outils personnels est active. `shared` exprime une intention,
-sans publication. La gestion privee du profil est ajoutee par l'ADR 0006 ;
-catalogue partage et demandes restent des etapes ulterieures.
+La gestion des outils personnels est active. Le comportement initial de
+`shared` est complete par l'ADR 0007 : `true` rend l'outil visible uniquement
+aux amis dont la relation est acceptee, sans publication publique. La gestion
+privee du profil est ajoutee par l'ADR 0006 ; les demandes d'amitie et les outils
+du quartier sont definis par l'ADR 0007.
 
 ## Consequences
 

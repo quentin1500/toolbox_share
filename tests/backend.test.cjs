@@ -154,6 +154,134 @@ test('profiles are derived from the verified email and isolated from other users
   assert.ok(aliceTool.id);
 });
 
+test('friend requests are normalized, recipient-controlled, and expose profiles only after acceptance', () => {
+  const api = runtime();
+  const aliceToken = token();
+  const bobToken = token({ email: 'Bob@example.com', sub: 'bob' });
+  api.dispatch_({ action: 'saveProfile', accessToken: aliceToken, profile: { name: 'Alice', phone: '111', address: 'Rue A' } });
+  api.dispatch_({ action: 'saveProfile', accessToken: bobToken, profile: { name: 'Bob', phone: '222', address: 'Rue B' } });
+  api.dispatch_({ action: 'create', accessToken: aliceToken, tool: { ...tool, shared: true } });
+  api.dispatch_({ action: 'create', accessToken: aliceToken, tool: { ...tool, name: 'Privé', shared: false } });
+  api.dispatch_({ action: 'create', accessToken: bobToken, tool: { ...tool, name: 'Marteau', shared: true } });
+  api.dispatch_({ action: 'create', accessToken: bobToken, tool: { ...tool, name: 'Étau privé', shared: false } });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(api.dispatch_({
+    action: 'sendFriendRequest', accessToken: aliceToken, email: 'BOB@example.com',
+    requester: 'bob@example.com', email1: 'bob@example.com', status: 'accepté'
+  }))), { submitted: true });
+  const sheet = api.__sheets.get('Amities');
+  assert.deepEqual(JSON.parse(JSON.stringify(sheet.getRange(1, 1, 2, 4).getValues())), [
+    ['email_1', 'email_2', 'demandeur', 'statut'],
+    ['alice@example.com', 'bob@example.com', 'alice@example.com', 'en attente']
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(api.dispatch_({ action: 'getFriendStatus', accessToken: bobToken }))), { incomingCount: 1 });
+  const aliceBeforeAcceptance = api.dispatch_({ action: 'listFriends', accessToken: aliceToken });
+  const bobBeforeAcceptance = api.dispatch_({ action: 'listFriends', accessToken: bobToken });
+  assert.deepEqual(JSON.parse(JSON.stringify(aliceBeforeAcceptance)), { friends: [], sent: [{ email: 'bob@example.com' }], received: [] });
+  assert.deepEqual(JSON.parse(JSON.stringify(bobBeforeAcceptance)), { friends: [], sent: [], received: [{ email: 'alice@example.com' }] });
+  assert.throws(() => api.dispatch_({
+    action: 'respondFriendRequest', accessToken: aliceToken, email: 'bob@example.com', decision: 'accept'
+  }), /FORBIDDEN/);
+  assert.deepEqual(JSON.parse(JSON.stringify(api.dispatch_({
+    action: 'listNeighborhoodTools', accessToken: aliceToken
+  }))), { tools: [] });
+
+  api.dispatch_({ action: 'respondFriendRequest', accessToken: bobToken, email: 'alice@example.com', decision: 'accept' });
+  assert.equal(sheet.getRange(2, 4, 1, 1).getValues()[0][0], 'accepté');
+  const aliceAfterAcceptance = api.dispatch_({ action: 'listFriends', accessToken: aliceToken });
+  assert.deepEqual(JSON.parse(JSON.stringify(aliceAfterAcceptance.friends)), [{
+    email: 'bob@example.com', name: 'Bob', phone: '222', address: 'Rue B'
+  }]);
+  const neighborhood = api.dispatch_({ action: 'listNeighborhoodTools', accessToken: aliceToken });
+  assert.deepEqual(JSON.parse(JSON.stringify(neighborhood.tools.map(item => [item.name, item.ownerEmail, item.ownerName]))), [
+    ['Marteau', 'bob@example.com', 'Bob']
+  ]);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(api.dispatch_({
+    action: 'sendFriendRequest', accessToken: bobToken, email: 'alice@example.com'
+  }))), { submitted: true });
+  assert.equal(sheet.getLastRow(), 2);
+  api.dispatch_({ action: 'deleteProfile', accessToken: bobToken });
+  assert.equal(sheet.getLastRow(), 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(api.dispatch_({ action: 'listNeighborhoodTools', accessToken: aliceToken }))), { tools: [] });
+});
+
+test('friend request refusal removes the row and unregistered targets are not disclosed', () => {
+  const api = runtime();
+  const aliceToken = token();
+  const bobToken = token({ email: 'bob@example.com', sub: 'bob' });
+  api.dispatch_({ action: 'saveProfile', accessToken: aliceToken, profile: {} });
+  api.dispatch_({ action: 'saveProfile', accessToken: bobToken, profile: {} });
+  assert.deepEqual(JSON.parse(JSON.stringify(api.dispatch_({
+    action: 'sendFriendRequest', accessToken: aliceToken, email: 'nobody@example.com'
+  }))), { submitted: true });
+  assert.deepEqual(JSON.parse(JSON.stringify(api.dispatch_({ action: 'listFriends', accessToken: aliceToken }))), {
+    friends: [], sent: [], received: []
+  });
+  api.dispatch_({ action: 'sendFriendRequest', accessToken: aliceToken, email: 'bob@example.com' });
+  api.dispatch_({ action: 'respondFriendRequest', accessToken: bobToken, email: 'alice@example.com', decision: 'decline' });
+  assert.equal(api.__sheets.get('Amities').getLastRow(), 1);
+  assert.throws(() => api.dispatch_({
+    action: 'sendFriendRequest', accessToken: aliceToken, email: 'alice@example.com'
+  }), /BAD_REQUEST/);
+});
+
+test('friendship email pairs are always stored alphabetically regardless of requester', () => {
+  const api = runtime();
+  const aliceToken = token();
+  const zoeToken = token({ email: 'zoe@example.com', sub: 'zoe' });
+  api.dispatch_({ action: 'saveProfile', accessToken: aliceToken, profile: {} });
+  api.dispatch_({ action: 'saveProfile', accessToken: zoeToken, profile: {} });
+  api.dispatch_({ action: 'sendFriendRequest', accessToken: zoeToken, email: 'alice@example.com' });
+  assert.deepEqual(JSON.parse(JSON.stringify(api.__sheets.get('Amities').getRange(2, 1, 1, 4).getValues())), [
+    ['alice@example.com', 'zoe@example.com', 'zoe@example.com', 'en attente']
+  ]);
+});
+
+test('either participant can remove pending requests or accepted friendships, but outsiders cannot', () => {
+  const api = runtime();
+  const aliceToken = token();
+  const bobToken = token({ email: 'bob@example.com', sub: 'bob' });
+  const carolToken = token({ email: 'carol@example.com', sub: 'carol' });
+  api.dispatch_({ action: 'saveProfile', accessToken: aliceToken, profile: {} });
+  api.dispatch_({ action: 'saveProfile', accessToken: bobToken, profile: {} });
+  api.dispatch_({ action: 'saveProfile', accessToken: carolToken, profile: {} });
+  api.dispatch_({ action: 'create', accessToken: bobToken, tool: { ...tool, name: 'Perceuse de Bob' } });
+
+  api.dispatch_({ action: 'sendFriendRequest', accessToken: aliceToken, email: 'bob@example.com' });
+  const sheet = api.__sheets.get('Amities');
+  assert.deepEqual(JSON.parse(JSON.stringify(api.dispatch_({
+    action: 'removeFriendship', accessToken: bobToken, email: 'alice@example.com'
+  }))), { removed: true });
+  assert.equal(sheet.getLastRow(), 1);
+
+  api.dispatch_({ action: 'sendFriendRequest', accessToken: aliceToken, email: 'bob@example.com' });
+  api.dispatch_({ action: 'removeFriendship', accessToken: aliceToken, email: 'bob@example.com' });
+  assert.equal(sheet.getLastRow(), 1);
+
+  api.dispatch_({ action: 'sendFriendRequest', accessToken: aliceToken, email: 'bob@example.com' });
+  api.dispatch_({ action: 'respondFriendRequest', accessToken: bobToken, email: 'alice@example.com', decision: 'accept' });
+  assert.equal(api.dispatch_({ action: 'listNeighborhoodTools', accessToken: aliceToken }).tools.length, 1);
+  assert.throws(() => api.dispatch_({
+    action: 'removeFriendship', accessToken: carolToken, email: 'alice@example.com',
+    email_1: 'alice@example.com', email_2: 'bob@example.com', requester: 'alice@example.com'
+  }), /NOT_FOUND/);
+  api.dispatch_({ action: 'removeFriendship', accessToken: aliceToken, email: 'bob@example.com' });
+  assert.equal(sheet.getLastRow(), 1);
+  assert.equal(api.dispatch_({ action: 'listFriends', accessToken: aliceToken }).friends.length, 0);
+  assert.equal(api.dispatch_({ action: 'listFriends', accessToken: bobToken }).friends.length, 0);
+  assert.equal(api.dispatch_({ action: 'listNeighborhoodTools', accessToken: aliceToken }).tools.length, 0);
+
+  api.dispatch_({ action: 'sendFriendRequest', accessToken: aliceToken, email: 'bob@example.com' });
+  api.dispatch_({ action: 'respondFriendRequest', accessToken: bobToken, email: 'alice@example.com', decision: 'accept' });
+  api.dispatch_({ action: 'removeFriendship', accessToken: bobToken, email: 'alice@example.com' });
+  assert.equal(sheet.getLastRow(), 1);
+  assert.equal(api.dispatch_({ action: 'listNeighborhoodTools', accessToken: aliceToken }).tools.length, 0);
+  assert.throws(() => api.dispatch_({
+    action: 'removeFriendship', accessToken: aliceToken, email: 'alice@example.com'
+  }), /BAD_REQUEST/);
+});
+
 test('tool APIs require an existing profile, then allow a profile with blank fields', () => {
   const api = runtime();
   const accessToken = token();
@@ -162,7 +290,13 @@ test('tool APIs require an existing profile, then allow a profile with blank fie
     { action: 'list' },
     { action: 'create', tool },
     { action: 'update', id: 'tool-id', tool },
-    { action: 'delete', id: 'tool-id' }
+    { action: 'delete', id: 'tool-id' },
+    { action: 'getFriendStatus' },
+    { action: 'listFriends' },
+    { action: 'sendFriendRequest', email: 'bob@example.com' },
+    { action: 'respondFriendRequest', email: 'bob@example.com', decision: 'accept' },
+    { action: 'removeFriendship', email: 'bob@example.com' },
+    { action: 'listNeighborhoodTools' }
   ]) {
     assert.throws(() => api.dispatch_({ ...request, accessToken }), /PROFILE_REQUIRED/);
   }

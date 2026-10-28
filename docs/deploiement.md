@@ -67,6 +67,8 @@ pas directement compatible avec ce contrat. Ne pas envoyer l'ID token a la place
    page de connexion Google. Les onglets personnels seront crees automatiquement.
    La feuille `Profils` est creee automatiquement au premier acces au profil et
    porte les colonnes `email`, `nom prénom`, `numéro de téléphone` et `adresse physique`.
+   La feuille `Amities` est creee automatiquement au premier appel social et porte
+   les colonnes `email_1`, `email_2`, `demandeur` et `statut`.
 7. Faire la recette navigateur ci-dessous AVANT publication. Certaines politiques
    Workspace interdisent les web apps anonymes ; ne pas contourner cette regle.
 
@@ -74,7 +76,9 @@ Un classeur neuf peut garder son onglet initial vide. Le code ne le supprime pas
 Les lignes personnelles ont deux colonnes `id` et `tool_json` ; ne pas modifier
 manuellement leur schema. La feuille `Profils` est privee ; ne pas modifier ses
 quatre en-tetes, ne jamais y stocker de tokens, et limiter l'acces au classeur
-aux responsables de confiance.
+aux responsables de confiance. La feuille `Amities` est egalement privee ; ne
+pas modifier ses quatre en-tetes ni ses lignes depuis Sheets, et ne jamais y
+ajouter d'identite ou de statut non verifies par l'application.
 
 ## 3. Configuration locale
 
@@ -140,6 +144,27 @@ client, meme temporairement. GitHub Pages n'offre pas de serveur pour le cacher.
   d'ajouter un e-mail ou un nom de feuille falsifie au corps et verifier que
   seule l'identite du JWT est utilisee. Verifier que les champs vides sont
   acceptes et qu'un retour a la ligne est refuse.
+- Avec deux comptes disposant d'un profil, envoyer une demande par e-mail et
+  verifier la ligne normalisee et triee dans `Amities`. Le demandeur ne doit voir
+  que l'e-mail dans « Demandes envoyees » ; le destinataire ne voit que l'e-mail
+  dans « Demandes recues ». Verifier qu'une adresse sans compte et les doublons
+  ne permettent pas d'enumerer l'existence des comptes.
+- Verifier que le demandeur ne peut pas accepter sa propre demande, que seul le
+  destinataire peut l'accepter/refuser, que l'acceptation met le statut a
+  `accepté` et que le refus supprime la ligne. Tester aussi les demandes croisees.
+- Verifier que le demandeur et le destinataire peuvent chacun resilier une
+  demande en attente, puis que chacun des deux amis peut rompre une relation
+  acceptee. Confirmer qu'un tiers ne peut pas la supprimer, que la confirmation
+  peut etre annulee sans effet, et qu'apres rupture profils et outils partages
+  ne sont plus accessibles reciproquement.
+- Avant acceptation, verifier qu'aucun champ de profil ni outil n'est lisible.
+  Apres acceptation, verifier que nom/prenom, telephone et adresse sont visibles
+  par les deux amis, que seuls les outils `shared=true` sont dans « Les outils
+  du quartier », et qu'un changement a `shared=false` le retire apres
+  actualisation. Tester recherche, filtres et affichage mobile.
+- Verifier le point rouge pour une demande recue, son actualisation a la
+  connexion, a l'ouverture et au rafraichissement de « Mes amis » ; aucune
+  notification temps reel n'est attendue.
 - Avec un compte sans ligne `Profils`, verifier que la connexion ouvre le
   formulaire requis, que chaque champ reste facultatif et que « Continuer »
   sans saisie cree la ligne et debloque l'inventaire. Cette recette s'applique
@@ -147,13 +172,13 @@ client, meme temporairement. GitHub Pages n'offre pas de serveur pour le cacher.
   Appeler directement les actions `list`, `create`, `update` et `delete` avant
   la creation : elles doivent toutes retourner `PROFILE_REQUIRED`.
 - Annuler la confirmation de suppression du profil et verifier qu'aucune donnee
-  ne change. La confirmer ensuite : seule la ligne du compte et son onglet
-  d'outils doivent disparaitre ; l'interface doit revenir au formulaire requis
-  et les actions outils doivent etre refusees par le serveur jusqu'a la creation
+  ne change. La confirmer ensuite : seule la ligne du compte, son onglet d'outils
+  et ses demandes/relations doivent disparaitre ; l'interface doit revenir au
+  formulaire requis et les actions outils doivent etre refusees par le serveur jusqu'a la creation
   d'un nouveau profil. Un rechargement ne doit pas recreer l'onglet. Verifier
-  que l'autre compte reste intact. Si une erreur survient pendant les deux
-  suppressions Sheets, verifier les deux donnees et relancer l'action si
-  necessaire.
+  que l'autre compte reste intact. Si une erreur survient pendant la suppression
+  des relations, du profil ou de l'onglet, verifier les donnees et relancer
+  l'action si necessaire.
 - Verifier refus d'un JWT expire, falsifie, d'un autre issuer/audience ou sans
    e-mail verifie ; verifier aussi le refus d'un ID token.
 - Verifier que les seuls scopes demandes sont `openid email profile` et que

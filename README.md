@@ -29,11 +29,16 @@ seront publiques, meme si leur origine est un secret GitHub.
 - Connexion, expiration et deconnexion locale.
 - Inventaire personnel : liste, recherche, filtres, ajout, modification, suppression.
 - Profil prive obligatoire a la premiere connexion (champs facultatifs) ;
-  suppression confirmee du profil et de l'onglet d'outils.
-- Backend : verifications cryptographiques RS256/ES256 et droits limites a son profil et son onglet.
-- Indicateur de partage prepare, sans publication effective pour le moment.
-- Le catalogue des autres utilisateurs et les demandes restent des prochaines
-  etapes, detaillees dans [la documentation fonctionnelle](docs/fonctionnel.md).
+  suppression confirmee du profil, de ses relations et de l'onglet d'outils.
+- Demandes d'amitie par e-mail, acceptation/refus par le destinataire, listes
+  d'amis et point rouge pour les demandes recues. Les champs du profil sont
+  visibles par les amis acceptes.
+- Backend : verifications cryptographiques RS256/ES256 et autorisations limitees
+  au profil, a l'inventaire et aux relations d'amitie de l'utilisateur.
+- Outils `shared=true` consultables par les amis acceptes dans « Les outils du
+  quartier », avec recherche et filtres. Les outils prives restent invisibles.
+- Les demandes d'emprunt et le suivi des prets sont les prochaines etapes,
+  detaillees dans [la documentation fonctionnelle](docs/fonctionnel.md).
 
 ## Verification
 
